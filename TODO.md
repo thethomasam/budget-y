@@ -1,0 +1,8 @@
+- Implement to service to tag transactions from past records
+- Projection savings 
+    - What happens when you invest
+    - Net profits (After Tax)
+- Expense calender
+- Visualizations to track expenses
+    - Weeekly budget exceeds
+    - Monthly limits
