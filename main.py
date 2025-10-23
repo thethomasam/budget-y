@@ -38,7 +38,7 @@ async def upload_csv(file: UploadFile = File(...),db: Session = Depends(get_db))
         df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
 
         # Validate required columns
-        required_columns = ['date', 'category', 'amount', 'card', 'merchant' ]
+        required_columns = ['Date', 'Description', 'Amount' ]
         if not all(col in df.columns for col in required_columns):
             raise HTTPException(
                 status_code=400,
@@ -51,11 +51,11 @@ async def upload_csv(file: UploadFile = File(...),db: Session = Depends(get_db))
         try:
             for _, row in df.iterrows():
                 transaction = Transaction(
-                    date = datetime.strptime(str(row['date']), '%Y-%m-%d').date(),
-                    merchant = row.get('merchant'),
+                    date = datetime.strptime(str(row['Date']), '%d/%m/%Y').date(),
+                    merchant = row.get('Description'),
                     category = row.get('category', None),
-                    amount = float(row['amount']),
-                    card = row.get('card')
+                    amount = float(row['Amount']),
+                    card = "American Express"
                 )
                 db.add(transaction)
                 transactions_added += 1
