@@ -156,6 +156,56 @@ def delete_all_transactions(db: Session = Depends(get_db)):
     return {"message": "All transactions deleted"}
 
 
+@app.patch("/transactions/categorize")
+def categorize_uncategorized_transactions(db: Session = Depends(get_db)):
+    """
+    Update all transactions with null/empty categories using auto-categorization.
+    Returns count of transactions categorized.
+    """
+    try:
+        # Query transactions with null or empty categories
+        uncategorized = db.query(Transaction).filter(
+            (Transaction.category == None) | (Transaction.category == "")
+        ).all()
+
+        if not uncategorized:
+            return {
+                "message": "No uncategorized transactions found",
+                "transactions_categorized": 0
+            }
+
+        if not categorizer.is_loaded():
+            raise HTTPException(
+                status_code=503,
+                detail="Categorization model not available"
+            )
+
+        # Batch categorize all merchants
+        merchants = [t.merchant or "" for t in uncategorized]
+        categories_results = categorizer.categorize_batch(merchants)
+
+        # Update transactions
+        transactions_updated = 0
+        for transaction, result in zip(uncategorized, categories_results):
+            transaction.category = result['category']
+            transactions_updated += 1
+
+        db.commit()
+
+        return {
+            "message": "Transactions categorized successfully",
+            "transactions_categorized": transactions_updated,
+            "categories_applied": list(set([r['category'] for r in categories_results]))
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error categorizing transactions: {str(e)}"
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
