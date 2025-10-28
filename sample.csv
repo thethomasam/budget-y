@@ -1,9 +1,0 @@
-date,merchant,category,amount,card
-2025-01-01,Whole Foods,Groceries,150.50,Chase Sapphire
-2025-01-02,Shell Gas Station,Transportation,45.00,Amex Gold
-2025-01-03,Netflix,Entertainment,15.99,Chase Sapphire
-2025-01-05,Target,Shopping,89.75,Discover
-2025-01-07,Chipotle,Dining,12.50,Chase Sapphire
-2025-01-10,Amazon,Shopping,234.99,Amex Gold
-2025-01-12,Starbucks,Dining,6.75,Chase Sapphire
-2025-01-15,CVS Pharmacy,Health,45.20,Discover

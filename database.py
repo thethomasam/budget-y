@@ -2,11 +2,13 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, Date
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime
+import os
 
 
 
-# Database setup
-DATABASE_URL = "sqlite:///./budgety.db"
+# Database setup - use environment variable or default path
+DATABASE_PATH = os.getenv("DATABASE_PATH", "./budgety.db")
+DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

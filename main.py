@@ -2,12 +2,14 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import pandas as pd
 import io
 from datetime import datetime, date
 
 from database import DATABASE_URL, engine, Base, get_db, Transaction
+from categorizer import TransactionCategorizer
+
 app = FastAPI(title="Budgety API")
 
 # CORS middleware
@@ -19,6 +21,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Initialize TF-IDF categorizer
+categorizer = TransactionCategorizer()
+
+# Pydantic models
+class TransactionText(BaseModel):
+    text: str
+
+class CategorizeRequest(BaseModel):
+    transactions: List[str]
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to Budgety API"}
@@ -27,8 +39,9 @@ def read_root():
 @app.post("/upload-csv")
 async def upload_csv(file: UploadFile = File(...),db: Session = Depends(get_db)):
     """
-    Upload a CSV file with transactions.
-    Expected columns: date, category, amount, card, merchant 
+    Upload a CSV file with transactions. Automatically categorizes transactions using TF-IDF.
+    Expected columns: Date, Description, Amount
+    Optional columns: category
     """
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="File must be a CSV")
@@ -38,7 +51,7 @@ async def upload_csv(file: UploadFile = File(...),db: Session = Depends(get_db))
         df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
 
         # Validate required columns
-        required_columns = ['date', 'category', 'amount', 'card', 'merchant' ]
+        required_columns = ['Date', 'Description', 'Amount' ]
         if not all(col in df.columns for col in required_columns):
             raise HTTPException(
                 status_code=400,
@@ -47,15 +60,30 @@ async def upload_csv(file: UploadFile = File(...),db: Session = Depends(get_db))
 
         db = next(get_db())
         transactions_added = 0
+        transactions_categorized = 0
 
         try:
-            for _, row in df.iterrows():
+            # Auto-categorize all descriptions at once (more efficient)
+            descriptions = df['Description'].tolist()
+            if categorizer.is_loaded():
+                categories_results = categorizer.categorize_batch(descriptions)
+            else:
+                categories_results = [{"category": None, "confidence": 0.0}] * len(descriptions)
+
+            for idx, row in df.iterrows():
+                # Use existing category if provided, otherwise use TF-IDF prediction
+                category = row.get('category', None)
+                if pd.isna(category) or category == '':
+                    category = categories_results[idx]['category']
+                    if category != 'Other':  # Only count as categorized if not "Other"
+                        transactions_categorized += 1
+
                 transaction = Transaction(
-                    date = datetime.strptime(str(row['date']), '%Y-%m-%d').date(),
-                    merchant = row.get('merchant'),
-                    category = row.get('category', None),
-                    amount = float(row['amount']),
-                    card = row.get('card')
+                    date = datetime.strptime(str(row['Date']), '%d/%m/%Y').date(),
+                    merchant = row.get('Description'),
+                    category = category,
+                    amount = float(row['Amount']),
+                    card = "American Express"
                 )
                 db.add(transaction)
                 transactions_added += 1
@@ -66,7 +94,8 @@ async def upload_csv(file: UploadFile = File(...),db: Session = Depends(get_db))
 
         return {
             "message": "CSV uploaded successfully",
-            "transactions_added": transactions_added
+            "transactions_added": transactions_added,
+            "transactions_auto_categorized": transactions_categorized
         }
 
     except Exception as e:
@@ -84,14 +113,23 @@ def get_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_
 
 @app.post("/transactions")
 def add_transactions(transaction: dict, db: Session = Depends(get_db)):
-    """Add a single transaction to the database"""
+    """Add a single transaction to the database with automatic categorization"""
     try:
-      
+        # Get category from request or auto-categorize using TF-IDF
+        category = transaction.get('category')
+
+        if not category and categorizer.is_loaded():
+            # Auto-categorize based on merchant name
+            merchant = transaction.get('merchant', '')
+            if merchant:
+                result = categorizer.categorize(merchant)
+                category = result['category']
+
         # Create new transaction
         new_transaction = Transaction(
             date=datetime.now().date(),
             merchant=transaction.get('merchant'),
-            category=transaction.get('category'),
+            category=category,
             amount=float(transaction['amount']),
             card=transaction.get('card')
         )
@@ -103,6 +141,7 @@ def add_transactions(transaction: dict, db: Session = Depends(get_db)):
         return {
             "message": "Transaction added successfully",
             "id": new_transaction.id,
+            "category": category,
             "transaction": transaction
         }
     except Exception as e:

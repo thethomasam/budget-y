@@ -1,1 +1,2 @@
 alembic/__pycache__/
+*.db
