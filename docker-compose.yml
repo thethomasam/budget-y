@@ -5,6 +5,9 @@ services:
       - "8000:8000"
     volumes:
       - budgety_data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data/budgety.db
+      - TFIDF_MODEL_PATH=/app/data/tfidf_vectorizer.pkl
     restart: unless-stopped
 
 volumes:

@@ -5,3 +5,4 @@ sqlalchemy==2.0.35
 pandas==2.2.3
 alembic==1.13.1
 scikit-learn
+joblib

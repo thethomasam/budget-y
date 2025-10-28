@@ -1,0 +1,24 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.git
+.gitignore
+.vscode
+.idea
+*.md
+README.md
+.env
+venv
+env
+ENV
+tests
+*.csv
+# Keep the model file - we want to copy it
+!tfidf_vectorizer.pkl
