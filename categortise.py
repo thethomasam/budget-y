@@ -60,7 +60,7 @@ def weak_label(t):
 
 df["label"] = df["text"].apply(weak_label).fillna("Other")
 
-# Merge rare labels into "Other" to ensure each class has at least 2 samples for stratify
+# # Merge rare labels into "Other" to ensure each class has at least 2 samples for stratify
 min_per_class = 2
 vc = df["label"].value_counts()
 rare_labels = vc[vc < min_per_class].index
@@ -92,5 +92,9 @@ clf.fit(X_train_emb, y_train)
 pred = clf.predict(X_test_emb)
 print(classification_report(y_test, pred))
 
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
+cm = confusion_matrix(y_test, pred)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+disp.plot(cmap='Blues', xticks_rotation=45).save()
 df.to_csv("sample-2.csv")
