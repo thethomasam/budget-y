@@ -1,4 +1,4 @@
-- Implement to service to tag transactions from past records
+- Implement to service to tag transactions from past records: Done 
 - Projection savings 
     - What happens when you invest
     - Net profits (After Tax)

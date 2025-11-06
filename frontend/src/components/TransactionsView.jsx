@@ -1,4 +1,23 @@
-const TransactionsView = ({ transactions }) => {
+import { useData } from '../context/DataContext';
+
+const TransactionsView = () => {
+  const { transactions, loading } = useData();
+
+  if (loading) {
+    return (
+      <div className="p-5 flex items-center justify-center h-64">
+        <div className="text-text-secondary">Loading transactions...</div>
+      </div>
+    );
+  }
+
+  if (!transactions || transactions.length === 0) {
+    return (
+      <div className="p-5 flex items-center justify-center h-64">
+        <div className="text-text-secondary">No transactions found</div>
+      </div>
+    );
+  }
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const today = new Date();

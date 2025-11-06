@@ -1,6 +1,16 @@
 import { HiOutlineDotsHorizontal } from 'react-icons/hi';
+import { useData } from '../context/DataContext';
 
-const RecentTransactionsCard = ({ transactions }) => {
+const RecentTransactionsCard = () => {
+  const { recentTransactions: transactions, loading } = useData();
+
+  if (loading || !transactions || transactions.length === 0) {
+    return (
+      <div className="bg-bg-card rounded-2xl p-3 shadow-sm h-full flex items-center justify-center">
+        <div className="text-text-secondary">Loading...</div>
+      </div>
+    );
+  }
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const today = new Date();
@@ -36,9 +46,9 @@ const RecentTransactionsCard = ({ transactions }) => {
               <div className="flex items-center gap-2 flex-1">
                 <div
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
-                  style={{ backgroundColor: transaction.color + '20' }}
+                  style={{ backgroundColor: (transaction.color || '#5B6FED') + '20' }}
                 >
-                  {transaction.icon}
+                  {transaction.icon || '💳'}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium text-text-primary mb-0.5 overflow-hidden text-ellipsis whitespace-nowrap">

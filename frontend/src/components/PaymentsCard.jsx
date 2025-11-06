@@ -1,7 +1,18 @@
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { HiOutlineDotsHorizontal } from 'react-icons/hi';
+import { useData } from '../context/DataContext';
 
-const CategoryBreakdownCard = ({ categoryBreakdown }) => {
+const CategoryBreakdownCard = () => {
+  const { categoryBreakdown, loading } = useData();
+
+  if (loading || !categoryBreakdown || categoryBreakdown.length === 0) {
+    return (
+      <div className="bg-bg-card rounded-2xl p-3 shadow-sm h-full flex items-center justify-center">
+        <div className="text-text-secondary">Loading...</div>
+      </div>
+    );
+  }
+
   const topCategory = categoryBreakdown[0];
 
   return (
