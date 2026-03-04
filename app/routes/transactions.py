@@ -17,7 +17,7 @@ categorizer = TransactionCategorizer()
 @router.post("/upload-csv")
 async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
-    Upload a CSV file with transactions. Automatically categorizes transactions using TF-IDF.
+    Upload a CSV file with transactions
     Expected columns: Date, Description, Amount
     Optional columns: category
     """
@@ -37,29 +37,20 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
             )
 
         transactions_added = 0
-        transactions_categorized = 0
-
-        # Auto-categorize all descriptions at once (more efficient)
-        descriptions = df['Description'].tolist()
-        if categorizer.is_loaded():
-            categories_results = categorizer.categorize_batch(descriptions)
-        else:
-            categories_results = [{"category": None, "confidence": 0.0}] * len(descriptions)
-
+        transactions_uncategorized = 0
         for idx, row in df.iterrows():
-            # Use existing category if provided, otherwise use TF-IDF prediction
             category = row.get('category', None)
             if pd.isna(category) or category == '':
-                category = categories_results[idx]['category']
-                if category != 'Other':  # Only count as categorized if not "Other"
-                    transactions_categorized += 1
+                category = "uncategorized"
+                transactions_uncategorized += 1
 
             transaction = Transaction(
                 date=datetime.strptime(str(row['Date']), '%d/%m/%Y').date(),
-                merchant=row.get('Description'),
+                merchant=row.get("Description"),
                 category=category,
-                amount=float(row['Amount']),
+                amount=float(row["Amount"]),
                 card="American Express"
+
             )
             db.add(transaction)
             transactions_added += 1
@@ -69,7 +60,7 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
         return {
             "message": "CSV uploaded successfully",
             "transactions_added": transactions_added,
-            "transactions_auto_categorized": transactions_categorized
+            "transactions_uncategorized": transactions_uncategorized
         }
 
     except Exception as e:
@@ -84,26 +75,19 @@ def get_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_
 
 
 @router.post("")
-def add_transaction(transaction: dict, db: Session = Depends(get_db)):
+def add_transaction(category: str, merchant: str, amount: float, card: str, db: Session = Depends(get_db)):
     """Add a single transaction to the database with automatic categorization"""
     try:
         # Get category from request or auto-categorize using TF-IDF
-        category = transaction.get('category')
 
-        if not category and categorizer.is_loaded():
-            # Auto-categorize based on merchant name
-            merchant = transaction.get('merchant', '')
-            if merchant:
-                result = categorizer.categorize(merchant)
-                category = result['category']
 
         # Create new transaction
         new_transaction = Transaction(
             date=datetime.now().date(),
-            merchant=transaction.get('merchant'),
+            merchant=merchant,
             category=category,
-            amount=float(transaction['amount']),
-            card=transaction.get('card')
+            amount=amount,
+            card=card
         )
 
         db.add(new_transaction)
@@ -114,7 +98,6 @@ def add_transaction(transaction: dict, db: Session = Depends(get_db)):
             "message": "Transaction added successfully",
             "id": new_transaction.id,
             "category": category,
-            "transaction": transaction
         }
     except Exception as e:
         db.rollback()
@@ -128,52 +111,3 @@ def delete_all_transactions(db: Session = Depends(get_db)):
     db.commit()
     return {"message": "All transactions deleted"}
 
-
-@router.patch("/categorize")
-def categorize_uncategorized_transactions(db: Session = Depends(get_db)):
-    """
-    Update all transactions with null/empty categories using auto-categorization.
-    Returns count of transactions categorized.
-    """
-    try:
-        # Query transactions with null or empty categories
-        uncategorized = db.query(Transaction).filter(
-            (Transaction.category == None) | (Transaction.category == "")
-        ).all()
-
-        if not uncategorized:
-            return {
-                "message": "No uncategorized transactions found",
-                "transactions_categorized": 0
-            }
-
-        if not categorizer.is_loaded():
-            raise HTTPException(
-                status_code=503,
-                detail="Categorization model not available"
-            )
-
-        # Batch categorize all merchants
-        merchants = [t.merchant or "" for t in uncategorized]
-        categories_results = categorizer.categorize_batch(merchants)
-
-        # Update transactions
-        transactions_updated = 0
-        for transaction, result in zip(uncategorized, categories_results):
-            transaction.category = result['category']
-            transactions_updated += 1
-
-        db.commit()
-
-        return {
-            "message": "Transactions categorized successfully",
-            "transactions_categorized": transactions_updated,
-            "categories_applied": list(set([r['category'] for r in categories_results]))
-        }
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error categorizing transactions: {str(e)}"
-        )
