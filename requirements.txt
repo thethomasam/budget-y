@@ -6,3 +6,7 @@ pandas==2.2.3
 alembic==1.13.1
 scikit-learn
 joblib
+requests
+httpx
+pyyaml
+python-dotenv
