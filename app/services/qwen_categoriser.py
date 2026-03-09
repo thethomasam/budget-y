@@ -4,6 +4,7 @@ import time
 import yaml
 import httpx
 from pathlib import Path
+from typing import Optional
 from sqlalchemy.orm import Session
 from app.models import Transaction
 
@@ -101,8 +102,8 @@ Return ONLY the category name."""
         print(f"LLM Error: {e}")
         return "Other"
 
-def find_similar_transaction(merchant: str, db: Session) -> Dict[str, any]:
-    """Find similar transaction in DB and return category with confidence."""
+def find_similar_transaction(merchant: str, db: Session) -> Optional[str]:
+    """Find similar transaction in DB and return category."""
     normalized_merchant = normalize_transaction(merchant)
 
     # Search for transactions with similar merchant names

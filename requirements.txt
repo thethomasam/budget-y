@@ -9,3 +9,4 @@ joblib
 requests
 httpx
 pyyaml
+python-dotenv
