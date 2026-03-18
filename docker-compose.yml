@@ -1,6 +1,11 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
   ollama:
     image: ollama/ollama
     ports:
@@ -26,9 +31,27 @@ services:
     env_file:
       - .env
     depends_on:
+      redis:
+        condition: service_started
       ollama:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    volumes:
+      - .:/app
+      - ./budgety.db:/app/budgety.db
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_healthy
+    command: celery -A app.celery_app worker --loglevel=info
 
   frontend:
     build:
