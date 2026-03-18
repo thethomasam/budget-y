@@ -1,6 +1,6 @@
 llm:
   model: "qwen3:8b"
-  url: "http://192.168.0.81:11434/api/generate"
+  url: "http://ollama:11434/api/generate"
   timeout: 120.0
   think: false
 

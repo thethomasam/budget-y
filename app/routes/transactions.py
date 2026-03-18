@@ -1,17 +1,16 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.orm import Session
+from typing import Optional
+import asyncio
 import pandas as pd
 import io
 from datetime import datetime
 
 from app.database import get_db
 from app.models import Transaction
-from categorizer import TransactionCategorizer
+from app.services.qwen_categoriser import categorise_transaction
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
-
-# Initialize TF-IDF categorizer
-categorizer = TransactionCategorizer()
 
 
 @router.post("/upload-csv")
@@ -36,21 +35,26 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
                 detail=f"CSV must contain columns: {', '.join(required_columns)}"
             )
 
-        transactions_added = 0
-        transactions_uncategorized = 0
-        for idx, row in df.iterrows():
+        rows = list(df.iterrows())
+
+        # Gather all categorization calls concurrently
+        async def resolve_category(row):
             category = row.get('category', None)
             if pd.isna(category) or category == '':
-                category = "uncategorized"
-                transactions_uncategorized += 1
+                return await categorise_transaction(row.get("Description"), float(row["Amount"]), db), True
+            return category, False
 
+        results = await asyncio.gather(*[resolve_category(row) for _, row in rows])
+
+        transactions_added = 0
+        transactions_categorized = sum(1 for _, auto in results if auto)
+        for (_, row), (category, _) in zip(rows, results):
             transaction = Transaction(
                 date=datetime.strptime(str(row['Date']), '%d/%m/%Y').date(),
                 merchant=row.get("Description"),
                 category=category,
                 amount=float(row["Amount"]),
                 card="American Express"
-
             )
             db.add(transaction)
             transactions_added += 1
@@ -60,7 +64,7 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
         return {
             "message": "CSV uploaded successfully",
             "transactions_added": transactions_added,
-            "transactions_uncategorized": transactions_uncategorized
+            "transactions_categorized": transactions_categorized
         }
 
     except Exception as e:
@@ -75,13 +79,12 @@ def get_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_
 
 
 @router.post("")
-def add_transaction(category: str, merchant: str, amount: float, card: str, db: Session = Depends(get_db)):
+async def add_transaction(merchant: str, amount: float, card: str, category: Optional[str] = None, db: Session = Depends(get_db)):
     """Add a single transaction to the database with automatic categorization"""
     try:
-        # Get category from request or auto-categorize using TF-IDF
+        if not category:
+            category = await categorise_transaction(merchant, amount, db)
 
-
-        # Create new transaction
         new_transaction = Transaction(
             date=datetime.now().date(),
             merchant=merchant,
