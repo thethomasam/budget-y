@@ -6,7 +6,7 @@ import { TbPropeller } from 'react-icons/tb';
 
 const Sidebar = ({ activeView, onViewChange }) => {
   return (
-    <aside className="w-[70px] bg-bg-card flex flex-col items-center py-6 gap-8 border-r border-border fixed h-screen z-[100]">
+    <aside className="hidden sm:flex w-[70px] bg-bg-card flex-col items-center py-6 gap-8 border-r border-border fixed h-screen z-[100]">
       <div className="w-10 h-10 bg-gradient-to-br from-primary-blue to-primary-dark rounded-xl flex items-center justify-center text-white text-2xl">
         <TbPropeller />
       </div>

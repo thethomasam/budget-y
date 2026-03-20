@@ -8,7 +8,7 @@ const Header = () => {
         <h1 className="text-2xl font-semibold mb-1">
           Hi, <span className="font-bold">Sam Thomas</span>
         </h1>
-        <p className="text-text-secondary text-sm">
+        <p className="text-text-secondary text-sm hidden sm:block">
           Here is the update from your payment channels, that is really important for you to catch up.
         </p>
       </div>
