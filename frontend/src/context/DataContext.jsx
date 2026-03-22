@@ -14,6 +14,7 @@ export const DataProvider = ({ children }) => {
   const [transactions, setTransactions] = useState([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [monthlyExpenses, setMonthlyExpenses] = useState([]);
+  const [settings, setSettings] = useState({ user: { name: '' }, budget_goals: [], transaction_limit: 1000 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -22,19 +23,11 @@ export const DataProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      // Fetch all data in parallel
       const [transactionsRes, categoryRes, monthlyRes] = await Promise.all([
         fetch('/api/transactions?limit=1000'),
         fetch('/api/analytics/category-breakdown'),
         fetch('/api/analytics/monthly-expenses')
       ]);
-
-      // Log responses for debugging
-      console.log('API Responses:', {
-        transactions: transactionsRes.status,
-        category: categoryRes.status,
-        monthly: monthlyRes.status
-      });
 
       if (!transactionsRes.ok || !categoryRes.ok || !monthlyRes.ok) {
         const errorDetails = {
@@ -46,11 +39,15 @@ export const DataProvider = ({ children }) => {
         throw new Error(`Failed to fetch data from API: ${JSON.stringify(errorDetails)}`);
       }
 
+      // Settings is optional — use defaults if it fails
+      const settingsData = await fetch('/api/settings')
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null);
+
       const transactionsData = await transactionsRes.json();
       const categoryData = await categoryRes.json();
       const monthlyData = await monthlyRes.json();
 
-      // Map category data to include colors for charts
       const colors = ['#5B6FED', '#FF6B9D', '#FFC542', '#00D4AA', '#9B7EFF', '#FF8A65', '#4CAF50', '#FF5722'];
       const categoryBreakdownWithColors = categoryData.categories.map((cat, index) => ({
         name: cat.category,
@@ -59,6 +56,7 @@ export const DataProvider = ({ children }) => {
         color: colors[index % colors.length]
       }));
 
+      if (settingsData) setSettings(settingsData);
       setTransactions(transactionsData);
       setCategoryBreakdown(categoryBreakdownWithColors);
       setMonthlyExpenses(monthlyData.monthly_expenses || []);
@@ -78,7 +76,6 @@ export const DataProvider = ({ children }) => {
     fetchData();
   }, []);
 
-  // Calculate derived data
   const getTotalExpense = () => {
     return transactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
   };
@@ -91,28 +88,40 @@ export const DataProvider = ({ children }) => {
   };
 
   const getRecentTransactions = (limit = 5) => {
-    return transactions
+    return [...transactions]
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, limit);
   };
 
+  // Build budget progress from real transaction data + config budget goals
+  const getBudgetProgress = () => {
+    return settings.budget_goals.map(goal => {
+      const spent = transactions
+        .filter(t => t.category === goal.name && t.amount < 0)
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      const percentage = goal.budget > 0 ? (spent / goal.budget) * 100 : 0;
+      return {
+        name: goal.name,
+        icon: goal.icon,
+        budget: goal.budget,
+        amount: spent,
+        percentage,
+      };
+    });
+  };
+
   const value = {
-    // Raw data
     transactions,
     categoryBreakdown,
     monthlyExpenses,
-
-    // State
+    settings,
     loading,
     error,
-
-    // Actions
     refetch,
-
-    // Computed data
     totalExpense: getTotalExpense(),
     currentMonthExpense: getCurrentMonthExpense(),
     recentTransactions: getRecentTransactions(),
+    budgetProgress: getBudgetProgress(),
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

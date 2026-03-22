@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DataProvider } from './context/DataContext';
+import { DataProvider, useData } from './context/DataContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import KPICards from './components/KPICards';
@@ -9,9 +9,40 @@ import SpendingTrendCard from './components/SaleCard';
 import SavingsTrendCard from './components/SavingsTrendCard';
 import RecentTransactionsCard from './components/RecentTransactionsCard';
 import TransactionsView from './components/TransactionsView';
-import { sampleData } from './data/sampleData';
 import { AiFillHome } from 'react-icons/ai';
 import { BiWallet } from 'react-icons/bi';
+
+function Dashboard() {
+  const { budgetProgress, loading, error } = useData();
+
+  if (loading || error) return (
+    <div className="flex items-center justify-center h-64 text-text-secondary text-sm">
+      No data yet
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Row 1: KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KPICards />
+      </div>
+
+      {/* Row 2: Category Breakdown + Budget vs Actual + Recent Transactions */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
+        <CategoryBreakdownCard />
+        <BudgetProgressCard categories={budgetProgress} />
+        <RecentTransactionsCard />
+      </div>
+
+      {/* Row 3: Spending Trend + Savings Trend */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <SpendingTrendCard />
+        <SavingsTrendCard />
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const [activeView, setActiveView] = useState('dashboard');
@@ -23,31 +54,7 @@ function App() {
         <main className="flex-1 sm:ml-[70px] p-4 px-4 sm:px-5 max-h-screen overflow-y-auto pb-20 sm:pb-4">
           <Header />
           {activeView === 'dashboard' ? (
-            <div className="flex flex-col gap-4">
-              {/* Row 1: KPI Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <KPICards data={sampleData} />
-              </div>
-
-              {/* Row 2: Category Breakdown + Budget vs Actual + Recent Transactions */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
-                <CategoryBreakdownCard />
-                <BudgetProgressCard categories={sampleData.expenseCategories} />
-                <RecentTransactionsCard />
-              </div>
-
-              {/* Row 3: Spending Trend + Savings Trend */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <SpendingTrendCard
-                  dailySpending={sampleData.dailySpending}
-                  previousMonthSpending={sampleData.previousMonthSpending}
-                />
-                <SavingsTrendCard
-                  monthlySavings={sampleData.monthlySavings}
-                  previousYearSavings={sampleData.previousYearSavings}
-                />
-              </div>
-            </div>
+            <Dashboard />
           ) : activeView === 'transactions' ? (
             <TransactionsView />
           ) : null}

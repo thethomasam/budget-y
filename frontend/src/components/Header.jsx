@@ -1,12 +1,15 @@
-import { AiOutlineSearch } from 'react-icons/ai';
 import { IoNotificationsOutline } from 'react-icons/io5';
+import { useData } from '../context/DataContext';
 
 const Header = () => {
+  const { settings } = useData();
+  const userName = settings?.user?.name || '';
+
   return (
     <header className="flex justify-between items-start mb-4">
       <div>
         <h1 className="text-2xl font-semibold mb-1">
-          Hi, <span className="font-bold">Sam Thomas</span>
+          Hi, <span className="font-bold">{userName}</span>
         </h1>
         <p className="text-text-secondary text-sm hidden sm:block">
           Here is the update from your payment channels, that is really important for you to catch up.
