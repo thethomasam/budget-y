@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import time
 import yaml
 import httpx
@@ -15,9 +16,10 @@ config_path = Path(__file__).parent.parent.parent / "config.yaml"
 with open(config_path, "r") as f:
     config = yaml.safe_load(f)
 
-CATEGORIES = config["categories"]
+CATEGORIES = [g["name"] for g in config["budget_goals"]]
 LLM_CONFIG = config["llm"]
 SEARCH_CONFIG = config["search"]
+SIMILARITY_THRESHOLD = config["categoriser"]["similarity_threshold"]
 
 
 def normalize_transaction(transaction: str) -> str:
@@ -103,7 +105,74 @@ Return ONLY the category name."""
         print(f"LLM Error: {e}")
         return "Other"
 
-SIMILARITY_THRESHOLD = 0.8
+async def batch_categorise_with_llm(rows: list) -> dict:
+    """Categorize a batch of transactions in a single LLM call.
+    rows: [{"idx": int, "merchant": str, "amount": float}, ...]
+    returns: {"1": "Groceries", "2": "Dining & Food", ...}
+    """
+    start_time = time.time()
+    lines = "\n".join(f"{r['idx']}. {r['merchant']} | ${r['amount']}" for r in rows)
+    prompt = f"""Categorize each transaction into ONE of: {', '.join(CATEGORIES)}
+
+Transactions:
+{lines}
+
+Return ONLY valid JSON mapping number to category, e.g.: {{"1": "Groceries", "2": "Auto & Fuel"}}"""
+
+    try:
+        async with httpx.AsyncClient(timeout=LLM_CONFIG["timeout"]) as client:
+            response = await client.post(
+                LLM_CONFIG["url"],
+                json={
+                    "model": LLM_CONFIG["model"],
+                    "prompt": prompt,
+                    "stream": False,
+                    "think": LLM_CONFIG["think"]
+                }
+            )
+            raw = response.json()["response"].strip()
+            duration = time.time() - start_time
+            print(f"Batch LLM time: {duration:.2f}s ({len(rows)} rows)")
+            print(f"Batch LLM raw: {raw[:300]}")
+
+            # Strip <think>...</think> tags (qwen3 thinking mode)
+            cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+
+            # Extract JSON object
+            match = re.search(r'\{[^{}]*\}', cleaned, re.DOTALL)
+            if not match:
+                print(f"Batch LLM: no JSON found in response, falling back to per-row")
+                return await _fallback_categorise(rows)
+
+            try:
+                result = json.loads(match.group())
+            except json.JSONDecodeError:
+                print(f"Batch LLM: invalid JSON, falling back to per-row")
+                return await _fallback_categorise(rows)
+
+            # Validate categories
+            categorised = {
+                k: (v if v in CATEGORIES else "Other")
+                for k, v in result.items()
+            }
+            # Fill any missing rows with Other
+            for r in rows:
+                if str(r["idx"]) not in categorised:
+                    categorised[str(r["idx"])] = "Other"
+            return categorised
+
+    except Exception as e:
+        print(f"Batch LLM error: {e}")
+        return {str(r["idx"]): "Other" for r in rows}
+
+
+async def _fallback_categorise(rows: list) -> dict:
+    """Per-row LLM fallback when batch JSON parsing fails."""
+    results = {}
+    for r in rows:
+        category = await categorize_with_llm(r["merchant"], r["amount"], "")
+        results[str(r["idx"])] = category
+    return results
 
 
 def find_similar_transaction(merchant: str, db: Session) -> Optional[str]:
