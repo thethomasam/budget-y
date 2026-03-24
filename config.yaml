@@ -1,3 +1,65 @@
+app:
+  title: "Budgety API"
+  description: "Personal budget tracking and analytics API"
+  version: "1.0.0"
+  root_path: "/api"
+  port: 8000
+
+redis:
+  url: "redis://redis:6379/0"
+
+database:
+  path: "./budgety.db"
+
+user:
+  name: "Sam Thomas"
+
+categoriser:
+  similarity_threshold: 0.8
+
+frontend:
+  transaction_limit: 1000
+
+budget_goals:
+  - name: "Food & Groceries"
+    icon: "🛒"
+    budget: 500
+    aliases: ["Groceries", "Dining & Food", "Food & Dining"]
+  - name: "Transport"
+    icon: "🚗"
+    budget: 200
+    aliases: ["Auto & Fuel", "Transport & Travel", "Transportation"]
+  - name: "Shopping"
+    icon: "🛍️"
+    budget: 300
+    aliases: ["Shopping & Retail"]
+  - name: "Bills & Utilities"
+    icon: "💡"
+    budget: 500
+    aliases: ["Utilities & Bills", "Banking & Transfers"]
+  - name: "Entertainment"
+    icon: "🎬"
+    budget: 150
+    aliases: ["Entertainment & Subscriptions"]
+  - name: "Health & Wellness"
+    icon: "🏥"
+    budget: 200
+    aliases: ["Insurance & Healthcare", "Medical & Pharmacy", "Health & Fitness"]
+  - name: "Travel"
+    icon: "✈️"
+    budget: 300
+    aliases: ["Travel & Accommodation"]
+  - name: "Other"
+    icon: "📦"
+    budget: 200
+    aliases: ["Education & Learning", "Home & Hardware"]
+
+processing:
+  chunk_size: 100
+  llm_batch_size: 10
+  upload_dir: "/tmp/budgety_uploads"
+  job_ttl: 3600
+
 llm:
   model: "qwen3:8b"
   url: "http://ollama:11434/api/generate"

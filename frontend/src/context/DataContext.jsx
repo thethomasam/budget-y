@@ -96,8 +96,9 @@ export const DataProvider = ({ children }) => {
   // Build budget progress from real transaction data + config budget goals
   const getBudgetProgress = () => {
     return settings.budget_goals.map(goal => {
+      const names = new Set([goal.name, ...(goal.aliases || [])]);
       const spent = transactions
-        .filter(t => t.category === goal.name && t.amount < 0)
+        .filter(t => names.has(t.category))
         .reduce((sum, t) => sum + Math.abs(t.amount), 0);
       const percentage = goal.budget > 0 ? (spent / goal.budget) * 100 : 0;
       return {

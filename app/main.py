@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routes import transactions_router, categories_router, analytics_router
+from app.routes import transactions_router, categories_router, analytics_router, settings_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(transactions_router)
 app.include_router(categories_router)
 app.include_router(analytics_router)
+app.include_router(settings_router)
 
 
 @app.get("/", tags=["root"])
