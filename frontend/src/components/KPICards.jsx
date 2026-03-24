@@ -1,5 +1,6 @@
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { FiTrendingUp, FiTrendingDown } from 'react-icons/fi';
+import { useData } from '../context/DataContext';
 
 const KPICard = ({ title, value, change, changeType, sparklineData, icon, color = '#5B6FED' }) => {
   const isPositive = changeType === 'positive';
@@ -31,7 +32,7 @@ const KPICard = ({ title, value, change, changeType, sparklineData, icon, color 
           </span>
         </div>
       )}
-      {sparklineData && (
+      {sparklineData && sparklineData.length > 0 && (
         <div className="h-10 mt-1.5">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={sparklineData}>
@@ -57,28 +58,45 @@ const KPICard = ({ title, value, change, changeType, sparklineData, icon, color 
   );
 };
 
-const KPICards = ({ data }) => {
+const KPICards = () => {
+  const { transactions, currentMonthExpense, monthlyExpenses, settings } = useData();
+
+  const balance = transactions.reduce((sum, t) => sum + t.amount, 0);
+  const totalBudget = settings.budget_goals?.reduce((sum, g) => sum + g.budget, 0) || 0;
+  const budgetUsedPct = totalBudget > 0 ? ((currentMonthExpense / totalBudget) * 100).toFixed(1) : 0;
+
+  const ytdIncome = transactions
+    .filter(t => t.amount > 0 && new Date(t.date).getFullYear() === new Date().getFullYear())
+    .reduce((sum, t) => sum + t.amount, 0);
+  const ytdExpenses = transactions
+    .filter(t => t.amount < 0 && new Date(t.date).getFullYear() === new Date().getFullYear())
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const ytdSavings = ytdIncome - ytdExpenses;
+
+  const sparkline = monthlyExpenses.map(m => ({ amount: m.amount }));
+
   return (
     <>
       <KPICard
         title="Current Balance"
-        value={`$${data.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        change={`${data.balanceChange}% from last month`}
-        changeType="positive"
+        value={`$${Math.abs(balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        change={balance >= 0 ? 'Positive balance' : 'Negative balance'}
+        changeType={balance >= 0 ? 'positive' : 'negative'}
         icon="💰"
         color="#5B6FED"
+        sparklineData={sparkline}
       />
       <KPICard
         title="Monthly Spending"
-        value={`$${data.monthlySpending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        change={`${((data.monthlySpending / data.spendingBudget) * 100).toFixed(1)}% of budget`}
-        changeType={data.monthlySpending < data.spendingBudget * 0.8 ? 'positive' : 'negative'}
+        value={`$${currentMonthExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        change={`${budgetUsedPct}% of total budget`}
+        changeType={budgetUsedPct < 80 ? 'positive' : 'negative'}
         icon="💸"
         color="#FF6B9D"
       />
       <KPICard
-        title="Total Saved"
-        value={`$${data.ytdSavings.toLocaleString()}`}
+        title="Total Saved (YTD)"
+        value={`$${Math.max(0, ytdSavings).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
         change="Year to date"
         changeType="positive"
         icon="💎"

@@ -4,13 +4,18 @@ import { useData } from '../context/DataContext';
 const RecentTransactionsCard = () => {
   const { recentTransactions: transactions, loading } = useData();
 
-  if (loading || !transactions || transactions.length === 0) {
+  if (transactions.length === 0) {
     return (
       <div className="bg-bg-card rounded-2xl p-3 shadow-sm h-full flex items-center justify-center">
-        <div className="text-text-secondary">Loading...</div>
+        <div className="text-text-secondary">No spending data yet</div>
       </div>
     );
   }
+  else if (loading || !transactions) {
+    <div className="bg-bg-card rounded-2xl p-3 shadow-sm h-full flex items-center justify-center">
+      <div className="text-text-secondary">No spending data yet</div>
+    </div>
+  } 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const today = new Date();

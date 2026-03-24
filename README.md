@@ -28,21 +28,31 @@ API available at `http://localhost:8000` (docs at `/docs`)
 
 ## iOS Shortcuts Setup
 
-1. Open Shortcuts app
-2. Create new shortcut with these actions:
-   - Receive input (text)
-   - Parse transaction details
-   - HTTP POST to `http://YOUR_IP:8000/transactions`
-3. JSON body format:
-   ```json
-   {
-     "date": "2025-10-12",
-     "merchant": "Starbucks",
-     "amount": 5.50,
-     "card": "Visa",
-     "category": "Food & Dining"
-   }
-   ```
+1. Open **Shortcuts** app on your iPhone
+2. Tap **+** to create a new shortcut
+3. Follow the visual guide below to build your workflow:
+
+<table>
+<tr>
+<td width="50%">
+<img src="docs/images/shortcut-overview.png" width="100%" alt="Shortcut Workflow">
+<p align="center"><em>Step-by-step workflow</em></p>
+</td>
+<td width="50%">
+<img src="docs/images/shortcut-request.png" width="100%" alt="HTTP Request Config">
+<p align="center"><em>HTTP request configuration</em></p>
+</td>
+</tr>
+</table>
+
+JSON body format:
+```json
+{
+  "merchant": "Starbucks",
+  "amount": 5.50,
+  "card": "Visa"
+}
+```
 
 ## Usage
 

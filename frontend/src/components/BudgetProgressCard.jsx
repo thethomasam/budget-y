@@ -7,6 +7,12 @@ const BudgetProgressCard = ({ categories }) => {
     return '#4CAF50';
   };
 
+  if (!categories?.length) return (
+    <div className="bg-bg-card rounded-2xl p-3 shadow-sm h-full flex items-center justify-center">
+      <div className="text-text-secondary text-sm">No budget data yet</div>
+    </div>
+  );
+
   return (
     <div className="bg-bg-card rounded-2xl p-3 shadow-sm hover:shadow-md transition-all h-full flex flex-col">
       <div className="flex justify-between items-center mb-2">

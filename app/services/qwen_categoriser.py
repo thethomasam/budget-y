@@ -3,6 +3,7 @@ import re
 import time
 import yaml
 import httpx
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -41,8 +42,8 @@ async def web_search_merchant(merchant: str) -> str:
     """Search web for merchant info using Tavily API."""
     start_time = time.time()
     api_key = os.getenv("TAVILY_API_KEY")
-    normalized_merchant = normalize_transaction(merchant)
-    query = f"{normalized_merchant} business type category"
+
+    query = f"{merchant} business type category"
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -102,34 +103,52 @@ Return ONLY the category name."""
         print(f"LLM Error: {e}")
         return "Other"
 
-def find_similar_transaction(merchant: str, db: Session) -> Optional[str]:
-    """Find similar transaction in DB and return category."""
-    normalized_merchant = normalize_transaction(merchant)
+SIMILARITY_THRESHOLD = 0.8
 
-    # Search for transactions with similar merchant names
+
+def find_similar_transaction(merchant: str, db: Session) -> Optional[str]:
+    """Find similar transaction in DB using fuzzy match on normalized names.
+    Also checks if the first word matches (e.g. 'coles north park' ~ 'coles prospect').
+    """
+    normalized_merchant = normalize_transaction(merchant)
+    first_word = normalized_merchant.split()[0] if normalized_merchant else ""
+
     transactions = db.query(Transaction).filter(
         Transaction.category.isnot(None),
         Transaction.category != ""
     ).all()
+
     for txn in transactions:
         if txn.merchant:
             normalized_db = normalize_transaction(txn.merchant)
-            if normalized_merchant == normalized_db:
+
+            # Fuzzy full-name match
+            ratio = SequenceMatcher(None, normalized_merchant, normalized_db).ratio()
+            if ratio >= SIMILARITY_THRESHOLD:
+                print(f"Fuzzy match: '{normalized_merchant}' ~ '{normalized_db}' ({ratio:.2f})")
                 return txn.category
-   
+
+            # First-word match (catches 'coles north park' vs 'coles prospect')
+            if first_word and len(first_word) > 3 and normalized_db.startswith(first_word):
+                print(f"First-word match: '{normalized_merchant}' ~ '{normalized_db}' ('{first_word}')")
+                return txn.category
+
     return None
+
 
 async def categorise_transaction(merchant: str, amount: float, db: Session) -> str:
     """Categorize transaction by checking DB first, then using LLM if needed."""
+    normalized_merchant = normalize_transaction(merchant)
+    known_category = find_similar_transaction(normalized_merchant, db)
 
-    # Check DB for similar transactions
-    known_category = find_similar_transaction(merchant, db)
     if known_category:
         return known_category
-    # If not found or low confidence, use web search + LLM
-    print("No similar transaction found, using web search + LLM")
-    search_context = await web_search_merchant(merchant)
-    category = await categorize_with_llm(merchant, amount, search_context)
+
+    # Normalize before feeding to search + LLM
+   
+    print(f"No similar transaction found for '{normalized_merchant}', using web search + LLM")
+    search_context = await web_search_merchant(normalized_merchant)
+    category = await categorize_with_llm(normalized_merchant, amount, search_context)
 
     return category
 

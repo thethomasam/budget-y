@@ -1,70 +1,61 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.orm import Session
+from typing import Optional
 import pandas as pd
 import io
 from datetime import datetime
 
+from celery import group
+from celery.result import GroupResult
+
 from app.database import get_db
 from app.models import Transaction
-from categorizer import TransactionCategorizer
+from app.services.qwen_categoriser import categorise_transaction
+from app.tasks.csv_upload import categorise_row
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
-# Initialize TF-IDF categorizer
-categorizer = TransactionCategorizer()
-
 
 @router.post("/upload-csv")
-async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """
-    Upload a CSV file with transactions
-    Expected columns: Date, Description, Amount
-    Optional columns: category
-    """
-    if not file.filename.endswith('.csv'):
+async def upload_csv(file: UploadFile = File(...)):
+    if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
 
-    try:
-        contents = await file.read()
-        df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
+    contents = await file.read()
+    df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
 
-        # Validate required columns
-        required_columns = ['Date', 'Description', 'Amount']
-        if not all(col in df.columns for col in required_columns):
-            raise HTTPException(
-                status_code=400,
-                detail=f"CSV must contain columns: {', '.join(required_columns)}"
-            )
+    required_columns = ["Date", "Description", "Amount"]
+    if not all(col in df.columns for col in required_columns):
+        raise HTTPException(status_code=400, detail=f"CSV must contain columns: {', '.join(required_columns)}")
 
-        transactions_added = 0
-        transactions_uncategorized = 0
-        for idx, row in df.iterrows():
-            category = row.get('category', None)
-            if pd.isna(category) or category == '':
-                category = "uncategorized"
-                transactions_uncategorized += 1
+    tasks = group(
+        categorise_row.s(
+            row["Date"],
+            row["Description"],
+            float(row["Amount"]),
+            row.get("category") if pd.notna(row.get("category")) else None,
+        )
+        for _, row in df.iterrows()
+    )
+    result = tasks.apply_async()
+    result.save()
 
-            transaction = Transaction(
-                date=datetime.strptime(str(row['Date']), '%d/%m/%Y').date(),
-                merchant=row.get("Description"),
-                category=category,
-                amount=float(row["Amount"]),
-                card="American Express"
+    return {"group_id": result.id, "total": len(df), "status": "queued"}
 
-            )
-            db.add(transaction)
-            transactions_added += 1
 
-        db.commit()
+@router.get("/upload-csv/{group_id}")
+def get_upload_status(group_id: str):
+    result = GroupResult.restore(group_id, app=categorise_row.app)
+    if not result:
+        raise HTTPException(status_code=404, detail="Upload job not found")
 
-        return {
-            "message": "CSV uploaded successfully",
-            "transactions_added": transactions_added,
-            "transactions_uncategorized": transactions_uncategorized
-        }
+    total = len(result.results)
+    completed = sum(1 for r in result.results if r.successful())
+    failed = sum(1 for r in result.results if r.failed())
 
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error processing CSV: {str(e)}")
+    if result.ready():
+        return {"group_id": group_id, "status": "complete", "total": total, "completed": completed, "failed": failed}
+    return {"group_id": group_id, "status": "processing", "total": total, "completed": completed, "failed": failed}
 
 
 @router.get("")
@@ -75,13 +66,12 @@ def get_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_
 
 
 @router.post("")
-def add_transaction(category: str, merchant: str, amount: float, card: str, db: Session = Depends(get_db)):
+async def add_transaction(merchant: str, amount: float, card: str, category: Optional[str] = None, db: Session = Depends(get_db)):
     """Add a single transaction to the database with automatic categorization"""
     try:
-        # Get category from request or auto-categorize using TF-IDF
+        if not category:
+            category = await categorise_transaction(merchant, amount, db)
 
-
-        # Create new transaction
         new_transaction = Transaction(
             date=datetime.now().date(),
             merchant=merchant,

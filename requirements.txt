@@ -10,3 +10,5 @@ requests
 httpx
 pyyaml
 python-dotenv
+celery==5.4.0
+redis==5.2.0
