@@ -2,15 +2,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routes import transactions_router, categories_router, analytics_router
+from app.routes import transactions_router, categories_router, analytics_router, settings_router
+from app.config import config
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
+app_config = config["app"]
 app = FastAPI(
-    title="Budgety API",
-    description="Personal budget tracking and analytics API",
-    version="1.0.0"
+    title=app_config["title"],
+    description=app_config["description"],
+    version=app_config["version"],
+    root_path=app_config["root_path"]
 )
 
 # CORS middleware
@@ -26,6 +29,7 @@ app.add_middleware(
 app.include_router(transactions_router)
 app.include_router(categories_router)
 app.include_router(analytics_router)
+app.include_router(settings_router)
 
 
 @app.get("/", tags=["root"])
@@ -39,4 +43,4 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=app_config["port"])

@@ -1,3 +1,57 @@
+app:
+  title: "Budgety API"
+  description: "Personal budget tracking and analytics API"
+  version: "1.0.0"
+  root_path: "/api"
+  port: 8000
+
+redis:
+  url: "redis://redis:6379/0"
+
+database:
+  path: "./budgety.db"
+
+user:
+  name: "Sam Thomas"
+
+categoriser:
+  similarity_threshold: 0.8
+
+frontend:
+  transaction_limit: 1000
+
+budget_goals:
+  - name: "Food & Groceries"
+    icon: "🛒"
+    budget: 500
+  - name: "Transport"
+    icon: "🚗"
+    budget: 200
+  - name: "Shopping"
+    icon: "🛍️"
+    budget: 300
+  - name: "Bills & Utilities"
+    icon: "💡"
+    budget: 500
+  - name: "Entertainment"
+    icon: "🎬"
+    budget: 150
+  - name: "Health & Wellness"
+    icon: "🏥"
+    budget: 200
+  - name: "Travel"
+    icon: "✈️"
+    budget: 300
+  - name: "Other"
+    icon: "📦"
+    budget: 200
+
+processing:
+  chunk_size: 100
+  llm_batch_size: 10
+  upload_dir: "/tmp/budgety_uploads"
+  job_ttl: 3600
+
 llm:
   model: "qwen3:8b"
   url: "http://ollama:11434/api/generate"
@@ -7,20 +61,3 @@ llm:
 search:
   max_results: 3
   timeout: 10.0
-
-categories:
-  - "Groceries"
-  - "Transport & Travel"
-  - "Dining & Food"
-  - "Shopping & Retail"
-  - "Auto & Fuel"
-  - "Entertainment & Subscriptions"
-  - "Banking & Transfers"
-  - "Utilities & Bills"
-  - "Insurance & Healthcare"
-  - "Education & Learning"
-  - "Medical & Pharmacy"
-  - "Travel & Accommodation"
-  - "Health & Fitness"
-  - "Home & Hardware"
-  - "Other"

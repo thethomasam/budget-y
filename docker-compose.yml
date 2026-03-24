@@ -28,6 +28,7 @@ services:
     volumes:
       - .:/app
       - ./budgety.db:/app/budgety.db
+      - uploads:/tmp/budgety_uploads
     env_file:
       - .env
     depends_on:
@@ -44,6 +45,7 @@ services:
     volumes:
       - .:/app
       - ./budgety.db:/app/budgety.db
+      - uploads:/tmp/budgety_uploads
     env_file:
       - .env
     depends_on:
@@ -68,3 +70,4 @@ services:
 
 volumes:
   ollama_data:
+  uploads:

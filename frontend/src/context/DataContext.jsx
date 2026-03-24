@@ -97,7 +97,7 @@ export const DataProvider = ({ children }) => {
   const getBudgetProgress = () => {
     return settings.budget_goals.map(goal => {
       const spent = transactions
-        .filter(t => t.category === goal.name && t.amount < 0)
+        .filter(t => t.category === goal.name)
         .reduce((sum, t) => sum + Math.abs(t.amount), 0);
       const percentage = goal.budget > 0 ? (spent / goal.budget) * 100 : 0;
       return {

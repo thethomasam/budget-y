@@ -1,9 +1,12 @@
 from celery import Celery
+from app.config import config
+
+redis_url = config["redis"]["url"]
 
 celery_app = Celery(
     "budgety",
-    broker="redis://redis:6379/0",
-    backend="redis://redis:6379/0",
+    broker=redis_url,
+    backend=redis_url,
     include=["app.tasks.csv_upload"],
 )
 
