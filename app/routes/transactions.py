@@ -119,6 +119,17 @@ async def add_transaction(body: TransactionCreate, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail=f"Error adding transaction: {str(e)}")
 
 
+@router.delete("/{transaction_id}")
+def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
+    """Delete a single transaction by ID"""
+    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    db.delete(transaction)
+    db.commit()
+    return {"message": "Transaction deleted"}
+
+
 @router.delete("")
 def delete_all_transactions(db: Session = Depends(get_db)):
     """Delete all transactions"""

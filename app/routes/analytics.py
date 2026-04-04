@@ -43,6 +43,39 @@ def get_category_breakdown(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/monthly-category-spend")
+def get_monthly_category_spend(db: Session = Depends(get_db)):
+    """Get monthly spending broken down by category for all time"""
+    results = db.query(
+        Transaction.category,
+        func.strftime('%Y-%m', Transaction.date).label('month'),
+        func.sum(func.abs(Transaction.amount)).label('total')
+    ).filter(
+        Transaction.category.isnot(None),
+        Transaction.category != ""
+    ).group_by(Transaction.category, 'month').order_by('month').all()
+
+    months_set = sorted(set(r.month for r in results))
+    categories_set = sorted(set(r.category for r in results))
+
+    lookup = {(r.category, r.month): float(r.total) for r in results}
+
+    months_labels = [datetime.strptime(m, '%Y-%m').strftime('%b %Y') for m in months_set]
+
+    categories_data = [
+        {
+            "name": cat,
+            "monthly": [lookup.get((cat, m), 0) for m in months_set]
+        }
+        for cat in categories_set
+    ]
+
+    # Sort categories by total spend descending
+    categories_data.sort(key=lambda c: sum(c["monthly"]), reverse=True)
+
+    return {"months": months_labels, "categories": categories_data}
+
+
 @router.get("/monthly-expenses")
 def get_monthly_expenses(db: Session = Depends(get_db)):
     """Get monthly expense totals for the last 12 months"""
