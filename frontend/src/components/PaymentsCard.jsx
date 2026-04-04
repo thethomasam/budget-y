@@ -1,12 +1,38 @@
-import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { HiOutlineDotsHorizontal } from 'react-icons/hi';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { useData } from '../context/DataContext';
 
-const CategoryBreakdownCard = () => {
-  const { categoryBreakdown, loading } = useData();
+const COLORS = ['#5B6FED', '#FF6B9D', '#FFC542', '#00D4AA', '#9B7EFF', '#FF8A65', '#4CAF50', '#FF5722'];
 
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  const total = payload.reduce((s, p) => s + p.value, 0);
+  return (
+    <div className="bg-bg-card border border-bg-primary rounded-xl p-3 shadow-lg text-xs">
+      <p className="font-semibold text-text-primary mb-2">{label}</p>
+      {payload.map((p) => (
+        p.value > 0 && (
+          <div key={p.dataKey} className="flex items-center justify-between gap-4 mb-1">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.fill }} />
+              <span className="text-text-secondary">{p.dataKey}</span>
+            </div>
+            <span className="text-text-primary font-medium">${p.value.toFixed(0)}</span>
+          </div>
+        )
+      ))}
+      <div className="border-t border-bg-primary mt-2 pt-2 flex justify-between">
+        <span className="text-text-secondary">Total</span>
+        <span className="text-text-primary font-semibold">${total.toFixed(0)}</span>
+      </div>
+    </div>
+  );
+};
 
-  if (loading || !categoryBreakdown?.length) {
+const CategoryMonthlySpendCard = () => {
+  const { monthlyCategorySpend, loading } = useData();
+  const { months = [], categories = [] } = monthlyCategorySpend;
+
+  if (loading || !categories.length) {
     return (
       <div className="bg-bg-card rounded-2xl p-3 shadow-sm h-full flex items-center justify-center">
         <div className="text-text-secondary text-sm">No spending data yet</div>
@@ -14,62 +40,55 @@ const CategoryBreakdownCard = () => {
     );
   }
 
-  const topCategory = categoryBreakdown[0];
+  // Recharts wants data as array of { month, Cat1: val, Cat2: val, ... }
+  const chartData = months.map((month, i) => {
+    const entry = { month };
+    categories.forEach((cat) => {
+      entry[cat.name] = cat.monthly[i] || 0;
+    });
+    return entry;
+  });
 
   return (
-    <div className="bg-bg-card rounded-2xl p-3 shadow-sm hover:shadow-md transition-all h-full flex flex-col ">
-      <div className="flex justify-between items-center mb-2">
-        <h3 className="text-base font-semibold text-text-primary">Category Breakdown</h3>
-        <div className="w-6 h-6 rounded-lg flex items-center justify-center cursor-pointer transition-all text-text-secondary hover:bg-bg-primary">
-          <HiOutlineDotsHorizontal className="text-sm" />
-        </div>
+    <div className="bg-bg-card rounded-2xl p-3 shadow-sm hover:shadow-md transition-all h-full flex flex-col">
+      <div className="mb-3">
+        <h3 className="text-base font-semibold text-text-primary">Monthly Spend by Category</h3>
       </div>
-      <div className="flex-1 flex flex-col">
-        <div className="relative h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={categoryBreakdown}
-                cx="50%"
-                cy="50%"
-                innerRadius={65}
-                outerRadius={90}
-                paddingAngle={2}
-                dataKey="value"
-                startAngle={90}
-                endAngle={-270}
-              >
-                {categoryBreakdown.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-            <div className="text-2xl font-bold text-text-primary">
-              {topCategory.value.toFixed(1)}%
-            </div>
-            <div className="text-xs text-text-secondary">
-              {topCategory.name}
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          {categoryBreakdown.slice(0, 4).map((item, index) => (
-            <div key={index} className="flex items-center gap-1.5">
-              <div
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: item.color }}
+      <div className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 4, right: 4, left: -16, bottom: 4 }}>
+            <XAxis
+              dataKey="month"
+              tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+            />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+            <Legend
+              wrapperStyle={{ fontSize: 10, paddingTop: 8 }}
+              iconType="circle"
+              iconSize={8}
+            />
+            {categories.map((cat, i) => (
+              <Bar
+                key={cat.name}
+                dataKey={cat.name}
+                stackId="a"
+                fill={COLORS[i % COLORS.length]}
+                radius={i === categories.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
               />
-              <span className="text-[10px] text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
-                {item.name}
-              </span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
 };
 
-export default CategoryBreakdownCard;
+export default CategoryMonthlySpendCard;

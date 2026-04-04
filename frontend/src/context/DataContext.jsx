@@ -14,6 +14,7 @@ export const DataProvider = ({ children }) => {
   const [transactions, setTransactions] = useState([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [monthlyExpenses, setMonthlyExpenses] = useState([]);
+  const [monthlyCategorySpend, setMonthlyCategorySpend] = useState({ months: [], categories: [] });
   const [settings, setSettings] = useState({ user: { name: '' }, budget_goals: [], transaction_limit: 1000 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -23,17 +24,19 @@ export const DataProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      const [transactionsRes, categoryRes, monthlyRes] = await Promise.all([
+      const [transactionsRes, categoryRes, monthlyRes, monthlyCatRes] = await Promise.all([
         fetch('/api/transactions?limit=1000'),
         fetch('/api/analytics/category-breakdown'),
-        fetch('/api/analytics/monthly-expenses')
+        fetch('/api/analytics/monthly-expenses'),
+        fetch('/api/analytics/monthly-category-spend')
       ]);
 
-      if (!transactionsRes.ok || !categoryRes.ok || !monthlyRes.ok) {
+      if (!transactionsRes.ok || !categoryRes.ok || !monthlyRes.ok || !monthlyCatRes.ok) {
         const errorDetails = {
           transactions: !transactionsRes.ok ? `${transactionsRes.status} ${transactionsRes.statusText}` : 'OK',
           category: !categoryRes.ok ? `${categoryRes.status} ${categoryRes.statusText}` : 'OK',
-          monthly: !monthlyRes.ok ? `${monthlyRes.status} ${monthlyRes.statusText}` : 'OK'
+          monthly: !monthlyRes.ok ? `${monthlyRes.status} ${monthlyRes.statusText}` : 'OK',
+          monthlyCat: !monthlyCatRes.ok ? `${monthlyCatRes.status} ${monthlyCatRes.statusText}` : 'OK'
         };
         console.error('API Error Details:', errorDetails);
         throw new Error(`Failed to fetch data from API: ${JSON.stringify(errorDetails)}`);
@@ -47,6 +50,7 @@ export const DataProvider = ({ children }) => {
       const transactionsData = await transactionsRes.json();
       const categoryData = await categoryRes.json();
       const monthlyData = await monthlyRes.json();
+      const monthlyCatData = await monthlyCatRes.json();
 
       const colors = ['#5B6FED', '#FF6B9D', '#FFC542', '#00D4AA', '#9B7EFF', '#FF8A65', '#4CAF50', '#FF5722'];
       const categoryBreakdownWithColors = categoryData.categories.map((cat, index) => ({
@@ -60,6 +64,7 @@ export const DataProvider = ({ children }) => {
       setTransactions(transactionsData);
       setCategoryBreakdown(categoryBreakdownWithColors);
       setMonthlyExpenses(monthlyData.monthly_expenses || []);
+      setMonthlyCategorySpend(monthlyCatData);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -69,6 +74,11 @@ export const DataProvider = ({ children }) => {
   };
 
   const refetch = () => {
+    fetchData();
+  };
+
+  const deleteTransaction = async (id) => {
+    await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
     fetchData();
   };
 
@@ -115,10 +125,12 @@ export const DataProvider = ({ children }) => {
     transactions,
     categoryBreakdown,
     monthlyExpenses,
+    monthlyCategorySpend,
     settings,
     loading,
     error,
     refetch,
+    deleteTransaction,
     totalExpense: getTotalExpense(),
     currentMonthExpense: getCurrentMonthExpense(),
     recentTransactions: getRecentTransactions(),

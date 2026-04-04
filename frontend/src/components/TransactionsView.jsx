@@ -1,7 +1,8 @@
+import { HiOutlineTrash } from 'react-icons/hi';
 import { useData } from '../context/DataContext';
 
 const TransactionsView = () => {
-  const { transactions, loading } = useData();
+  const { transactions, loading, deleteTransaction } = useData();
 
   if (loading) {
     return (
@@ -95,12 +96,18 @@ const TransactionsView = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0 ml-3">
+                  <div className="flex items-center gap-3 flex-shrink-0 ml-3">
                     <div className={`text-base font-semibold ${
                       transaction.amount > 0 ? 'text-success' : 'text-text-primary'
                     }`}>
                       {transaction.amount > 0 ? '+' : ''}${Math.abs(transaction.amount).toFixed(2)}
                     </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteTransaction(transaction.id); }}
+                      className="p-1.5 rounded-lg text-text-secondary hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                    >
+                      <HiOutlineTrash className="text-base" />
+                    </button>
                   </div>
                 </div>
               ))}
