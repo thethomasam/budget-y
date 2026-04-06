@@ -71,10 +71,8 @@ const RecentTransactionsCard = () => {
                 </div>
               </div>
               <div className="text-right flex-shrink-0 ml-2">
-                <div className={`text-xs font-semibold mb-0.5 ${
-                  transaction.amount > 0 ? 'text-success' : 'text-text-primary'
-                }`}>
-                  {transaction.amount > 0 ? '+' : ''}${Math.abs(transaction.amount).toFixed(2)}
+                <div className="text-xs font-semibold mb-0.5 text-primary-blue">
+                  ${Math.abs(transaction.amount).toFixed(2)}
                 </div>
                 <div className="text-[9px] text-text-secondary">
                   {transaction.card}

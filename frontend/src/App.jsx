@@ -13,7 +13,7 @@ import { AiFillHome } from 'react-icons/ai';
 import { BiWallet } from 'react-icons/bi';
 
 function Dashboard() {
-  const { budgetProgress, loading, error } = useData();
+  const { loading, error } = useData();
 
   if (loading || error) return (
     <div className="flex items-center justify-center h-64 text-text-secondary text-sm">
@@ -31,7 +31,7 @@ function Dashboard() {
       {/* Row 2: Category Breakdown + Budget vs Actual + Recent Transactions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
         <CategoryBreakdownCard />
-        <BudgetProgressCard categories={budgetProgress} />
+        <BudgetProgressCard />
         <RecentTransactionsCard />
       </div>
 

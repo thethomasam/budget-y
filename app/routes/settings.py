@@ -11,5 +11,6 @@ def get_settings():
         "user": config["user"],
         "budget_goals": config["budget_goals"],
         "transaction_limit": config["frontend"]["transaction_limit"],
+        "monthly_budget": config["frontend"]["monthly_budget"],
         "categories": [g["name"] for g in config["budget_goals"]],
     }

@@ -1,4 +1,3 @@
-import { IoNotificationsOutline } from 'react-icons/io5';
 import { useData } from '../context/DataContext';
 
 const Header = () => {
@@ -16,18 +15,8 @@ const Header = () => {
         </p>
       </div>
 
-      <div className="flex gap-4 items-center">
-        <div className="w-10 h-10 rounded-full bg-bg-card flex items-center justify-center cursor-pointer transition-all text-text-secondary text-lg hover:bg-bg-primary">
-          <IoNotificationsOutline />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full border-2 border-bg-card"></span>
-        </div>
-        <div className="w-12 h-12 rounded-full overflow-hidden cursor-pointer border-2 border-border">
-          <img
-            src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop"
-            alt="User Avatar"
-            className="w-full h-full object-cover"
-          />
-        </div>
+      <div className="w-12 h-12 rounded-full bg-bg-card flex items-center justify-center border-2 border-border text-2xl select-none">
+        🦕
       </div>
     </header>
   );

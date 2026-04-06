@@ -61,9 +61,9 @@ const KPICard = ({ title, value, change, changeType, sparklineData, icon, color 
 const KPICards = () => {
   const { transactions, currentMonthExpense, monthlyExpenses, settings } = useData();
 
-  const balance = transactions.reduce((sum, t) => sum + t.amount, 0);
-  const totalBudget = settings.budget_goals?.reduce((sum, g) => sum + g.budget, 0) || 0;
-  const budgetUsedPct = totalBudget > 0 ? ((currentMonthExpense / totalBudget) * 100).toFixed(1) : 0;
+  const monthlyBudget = settings.monthly_budget || 3000;
+  const remaining = monthlyBudget - currentMonthExpense;
+  const budgetUsedPct = monthlyBudget > 0 ? ((currentMonthExpense / monthlyBudget) * 100).toFixed(1) : 0;
 
   const ytdIncome = transactions
     .filter(t => t.amount > 0 && new Date(t.date).getFullYear() === new Date().getFullYear())
@@ -78,10 +78,10 @@ const KPICards = () => {
   return (
     <>
       <KPICard
-        title="Current Balance"
-        value={`$${Math.abs(balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        change={balance >= 0 ? 'Positive balance' : 'Negative balance'}
-        changeType={balance >= 0 ? 'positive' : 'negative'}
+        title="Monthly Balance"
+        value={`$${Math.abs(remaining).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        change={remaining >= 0 ? `${budgetUsedPct}% of $${monthlyBudget.toLocaleString()} used` : `$${Math.abs(remaining).toFixed(2)} over budget`}
+        changeType={remaining >= 0 ? 'positive' : 'negative'}
         icon="💰"
         color="#5B6FED"
         sparklineData={sparkline}
@@ -89,7 +89,7 @@ const KPICards = () => {
       <KPICard
         title="Monthly Spending"
         value={`$${currentMonthExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        change={`${budgetUsedPct}% of total budget`}
+        change={`${budgetUsedPct}% of monthly budget`}
         changeType={budgetUsedPct < 80 ? 'positive' : 'negative'}
         icon="💸"
         color="#FF6B9D"

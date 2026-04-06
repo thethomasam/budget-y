@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.models import Transaction
+from app.config import config
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -76,20 +77,44 @@ def get_monthly_category_spend(db: Session = Depends(get_db)):
     return {"months": months_labels, "categories": categories_data}
 
 
-@router.get("/monthly-expenses")
-def get_monthly_expenses(db: Session = Depends(get_db)):
-    """Get monthly expense totals for the last 12 months"""
-    # Get data for last 12 months
+@router.get("/monthly-savings")
+def get_monthly_savings(db: Session = Depends(get_db)):
+    """Get monthly savings: monthly_budget - expenditure for each month"""
+    monthly_budget = config["frontend"]["monthly_budget"]
+
     twelve_months_ago = datetime.now().date() - timedelta(days=365)
 
     results = db.query(
         func.strftime('%Y-%m', Transaction.date).label('month'),
-        func.sum(func.abs(Transaction.amount)).label('total')
+        func.sum(Transaction.amount).label('total')
     ).filter(
         Transaction.date >= twelve_months_ago
     ).group_by('month').order_by('month').all()
 
-    # Format results with month names
+    monthly_data = []
+    for result in results:
+        month_date = datetime.strptime(result.month, '%Y-%m')
+        monthly_data.append({
+            "month": month_date.strftime('%b'),
+            "year": month_date.year,
+            "amount": monthly_budget - float(result.total)
+        })
+
+    return {"monthly_savings": monthly_data}
+
+
+@router.get("/monthly-expenses")
+def get_monthly_expenses(db: Session = Depends(get_db)):
+    """Get monthly expense totals for the last 12 months"""
+    twelve_months_ago = datetime.now().date() - timedelta(days=365)
+
+    results = db.query(
+        func.strftime('%Y-%m', Transaction.date).label('month'),
+        func.sum(Transaction.amount).label('total')
+    ).filter(
+        Transaction.date >= twelve_months_ago
+    ).group_by('month').order_by('month').all()
+
     monthly_data = []
     for result in results:
         month_date = datetime.strptime(result.month, '%Y-%m')

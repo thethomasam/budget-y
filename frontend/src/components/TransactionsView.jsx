@@ -97,10 +97,8 @@ const TransactionsView = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-                    <div className={`text-base font-semibold ${
-                      transaction.amount > 0 ? 'text-success' : 'text-text-primary'
-                    }`}>
-                      {transaction.amount > 0 ? '+' : ''}${Math.abs(transaction.amount).toFixed(2)}
+                    <div className="text-base font-semibold text-primary-blue">
+                      ${Math.abs(transaction.amount).toFixed(2)}
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteTransaction(transaction.id); }}
