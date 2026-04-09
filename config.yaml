@@ -19,28 +19,37 @@ categoriser:
 
 frontend:
   transaction_limit: 1000
+  monthly_budget: 3000
 
 budget_goals:
-  - name: "Food & Groceries"
+  - name: "Groceries"
     icon: "🛒"
-    budget: 500
-    aliases: ["Groceries", "Dining & Food", "Food & Dining"]
-  - name: "Transport"
-    icon: "🚗"
+    budget: 150
+    aliases: ["Groceries", "Supermarket"]
+  - name: "Dining & Food"
+    icon: "🍽️"
     budget: 200
-    aliases: ["Auto & Fuel", "Transport & Travel", "Transportation"]
+    aliases: ["Dining & Food", "Food & Dining", "Restaurants"]
+  - name: "Petrol & Fuel"
+    icon: "⛽"
+    budget: 70
+    aliases: ["Petrol", "Fuel", "Auto & Fuel"]
+  - name: "Transport & Travel"
+    icon: "🚗"
+    budget: 80
+    aliases: ["Transport & Travel", "Transportation", "Rideshare", "Public Transport", "Parking"]
   - name: "Shopping"
     icon: "🛍️"
-    budget: 300
+    budget: 200
     aliases: ["Shopping & Retail"]
   - name: "Bills & Utilities"
     icon: "💡"
-    budget: 500
+    budget: 300
     aliases: ["Utilities & Bills", "Banking & Transfers"]
   - name: "Entertainment"
     icon: "🎬"
-    budget: 150
-    aliases: ["Entertainment & Subscriptions"]
+    budget: 100
+    aliases: ["Entertainment & Subscriptions", "Movies"]
   - name: "Health & Wellness"
     icon: "🏥"
     budget: 200
@@ -63,7 +72,7 @@ processing:
 llm:
   model: "qwen3:8b"
   url: "http://ollama:11434/api/generate"
-  timeout: 120.0
+  timeout: 600.0
   think: false
 
 search:

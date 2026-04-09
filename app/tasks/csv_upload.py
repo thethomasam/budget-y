@@ -56,21 +56,37 @@ def categorise_single(transaction_id: int, merchant: str, amount: float):
 
 @celery_app.task
 def batch_categorise(job_id: str, rows: list):
-    """Categorise a batch of transactions via LLM and save to DB."""
+    """Save transactions immediately as 'Other', then update category via LLM."""
     r = get_redis()
     db = SessionLocal()
     try:
-        categories = asyncio.run(batch_categorise_with_llm(rows))
-
+        # Save all rows immediately so nothing is lost if LLM fails
+        txn_ids = []
         for row in rows:
-            category = categories.get(str(row["idx"]), "Other")
-            db.add(Transaction(
+            txn = Transaction(
                 date=datetime.strptime(row["date"], "%d/%m/%Y").date(),
                 merchant=row["merchant"],
-                category=category,
+                category="Other",
                 amount=row["amount"],
                 card=row.get("card", ""),
-            ))
+            )
+            db.add(txn)
+            db.flush()
+            txn_ids.append((row["idx"], txn.id))
+        db.commit()
+
+        # Now categorise and update
+        categories = asyncio.run(batch_categorise_with_llm(rows))
+
+        id_map = {idx: txn_id for idx, txn_id in txn_ids}
+        for row in rows:
+            category = categories.get(str(row["idx"]), "Other")
+            if category != "Other":
+                db.execute(
+                    update(Transaction)
+                    .where(Transaction.id == id_map[row["idx"]])
+                    .values(category=category)
+                )
         db.commit()
 
         r.hincrby(f"job:{job_id}", "llm_done", len(rows))
