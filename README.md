@@ -13,17 +13,9 @@ Frontend was built with Claude Code (Anthropic).
 
 ## How categorisation works
 
-```mermaid
-flowchart TD
-    A[New transaction] --> B{Fuzzy match\nin DB?}
-    B -->|Yes ≥0.8| C[Use existing category]
-    B -->|No| D[Save as 'Other']
-    D --> E[Tavily web search\nfor merchant context]
-    E --> F[Batch 10 → Qwen3:8b\nvia Ollama]
-    F --> G{Valid category\nreturned?}
-    G -->|Yes| H[Update category in DB]
-    G -->|No| I[Keep as 'Other']
-```
+1. **Fuzzy match** — normalises the merchant name and checks against existing categorised transactions (SequenceMatcher, threshold 0.8). Fast, no LLM needed.
+2. **LLM fallback** — unmatched merchants are batched (10 at a time), each gets a Tavily web search for context, then sent to `qwen3:8b` running locally via Ollama. Returns a JSON map of categories.
+3. Transactions are saved immediately with `"Other"` so nothing is lost if the LLM is slow or fails. Category is updated once the LLM responds.
 
 ## Architecture
 
@@ -79,6 +71,13 @@ docker exec budget-y-ollama-1 ollama pull qwen3:8b
 ```
 
 ## iOS Shortcut
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/shortcut-overview.png" width="100%" alt="Shortcut workflow"></td>
+<td width="50%"><img src="docs/images/shortcut-request.png" width="100%" alt="HTTP request config"></td>
+</tr>
+</table>
 
 POST to `https://<your-domain>/api/shortcut/transactions` with header `X-Api-Key: <key>`:
 
