@@ -32,17 +32,27 @@ async def upload_csv(file: UploadFile = File(...)):
     if len(contents) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large (max 10MB)")
 
-    df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
-    required_columns = ["Date", "Description", "Amount"]
-    if not all(col in df.columns for col in required_columns):
-        raise HTTPException(status_code=400, detail=f"CSV must contain columns: {', '.join(required_columns)}")
+    text = contents.decode("utf-8")
+    first_cell = text.split(",")[0].strip().strip('"')
+
+    # Detect ANZ headerless format: first cell looks like a date (DD/MM/YYYY)
+    import re as _re
+    if _re.match(r"\d{2}/\d{2}/\d{4}", first_cell):
+        # ANZ format: Date, Amount, Description (no header, amounts may be quoted/negative)
+        df = pd.read_csv(io.StringIO(text), header=None, names=["Date", "Amount", "Description"])
+        df["Amount"] = df["Amount"].astype(str).str.replace('"', '').astype(float)
+    else:
+        df = pd.read_csv(io.StringIO(text))
+        required_columns = ["Date", "Description", "Amount"]
+        if not all(col in df.columns for col in required_columns):
+            raise HTTPException(status_code=400, detail=f"CSV must contain columns: {', '.join(required_columns)}")
 
     # Save file to disk
     upload_dir = Path(PROC["upload_dir"])
     upload_dir.mkdir(parents=True, exist_ok=True)
     job_id = str(uuid.uuid4())
     file_path = upload_dir / f"{job_id}.csv"
-    file_path.write_bytes(contents)
+    df.to_csv(file_path, index=False)
 
     # Initialise job status in Redis
     r = redis_lib.from_url(REDIS_URL)
@@ -86,7 +96,7 @@ def get_upload_status(job_id: str):
 @router.get("")
 def get_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Get all transactions"""
-    return db.query(Transaction).offset(skip).limit(limit).all()
+    return db.query(Transaction).order_by(Transaction.date.desc()).offset(skip).limit(limit).all()
 
 
 @router.post("")

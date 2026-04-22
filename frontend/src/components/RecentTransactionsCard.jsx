@@ -50,11 +50,9 @@ const RecentTransactionsCard = () => {
             >
               <div className="flex items-center gap-2 flex-1">
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
+                  className="w-8 h-8 rounded-lg flex-shrink-0"
                   style={{ backgroundColor: (transaction.color || '#5B6FED') + '20' }}
-                >
-                  {transaction.icon || '💳'}
-                </div>
+                />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium text-text-primary mb-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
                     {transaction.merchant}

@@ -297,11 +297,9 @@ const TransactionsView = () => {
                   <div className="flex items-center justify-between flex-1 min-w-0">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div
-                        className="w-11 h-11 rounded-xl flex items-center justify-center text-[22px] flex-shrink-0"
+                        className="w-11 h-11 rounded-xl flex-shrink-0"
                         style={{ backgroundColor: transaction.color + '20' }}
-                      >
-                        {transaction.icon}
-                      </div>
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="text-[15px] font-medium text-text-primary mb-1 overflow-hidden text-ellipsis whitespace-nowrap">
                           {transaction.merchant}

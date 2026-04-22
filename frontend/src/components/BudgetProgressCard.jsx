@@ -50,7 +50,7 @@ const BudgetProgressCard = () => {
       .reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const percentage = fortnightBudget > 0 ? (spent / fortnightBudget) * 100 : 0;
     return { name: goal.name, icon: goal.icon, budget: fortnightBudget, amount: spent, percentage };
-  });
+  }).filter(cat => cat.amount > 0);
 
   if (!categories?.length) return (
     <div className="bg-bg-card rounded-2xl p-3 shadow-sm h-full flex items-center justify-center">
@@ -86,7 +86,7 @@ const BudgetProgressCard = () => {
 
       <div className="flex-1 overflow-y-auto">
         <div className="flex flex-col gap-2.5">
-          {categories.slice(0, 4).map((category, index) => (
+          {categories.map((category, index) => (
             <div key={index}>
               <div className="flex justify-between items-center mb-1">
                 <div className="flex items-center gap-1.5">

@@ -26,7 +26,7 @@ export const DataProvider = ({ children }) => {
       setError(null);
 
       const [transactionsRes, categoryRes, monthlyRes] = await Promise.all([
-        fetch('/api/transactions?limit=1000'),
+        fetch('/api/transactions?limit=5000'),
         fetch('/api/analytics/category-breakdown'),
         fetch('/api/analytics/monthly-expenses')
       ]);
@@ -67,7 +67,21 @@ export const DataProvider = ({ children }) => {
       }));
 
       if (settingsData) setSettings(settingsData);
-      setTransactions(transactionsData);
+
+      const goals = settingsData?.budget_goals || [];
+      const goalColors = ['#5B6FED', '#FF6B9D', '#FFC542', '#00D4AA', '#9B7EFF', '#FF8A65', '#4CAF50', '#FF5722', '#26C6DA', '#AB47BC'];
+      const goalMeta = {};
+      goals.forEach((g, i) => {
+        const meta = { color: goalColors[i % goalColors.length], icon: g.icon };
+        [g.name, ...(g.aliases || [])].forEach(alias => { goalMeta[alias] = meta; });
+      });
+      const enriched = transactionsData.map(t => ({
+        ...t,
+        color: goalMeta[t.category]?.color || '#5B6FED',
+        icon: goalMeta[t.category]?.icon || '💳',
+      }));
+
+      setTransactions(enriched);
       setCategoryBreakdown(categoryBreakdownWithColors);
       setMonthlyExpenses(monthlyData.monthly_expenses || []);
       if (monthlyCatData) setMonthlyCategorySpend(monthlyCatData);
