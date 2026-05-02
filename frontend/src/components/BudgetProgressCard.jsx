@@ -25,11 +25,20 @@ const getFortnightRange = (offset = 0) => {
   }
 };
 
+const getPacePercent = (start, end) => {
+  const now = new Date();
+  if (now < start) return 0;
+  if (now > end) return 100;
+  const total = end - start;
+  const elapsed = now - start;
+  return (elapsed / total) * 100;
+};
+
 const fmt = (d) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
 
-const getStatusColor = (percentage) => {
-  if (percentage >= 90) return '#F44336';
-  if (percentage >= 70) return '#FFC107';
+const getStatusColor = (percentage, pace) => {
+  if (percentage > pace + 20) return '#F44336';
+  if (percentage > pace + 5) return '#FFC107';
   return '#4CAF50';
 };
 
@@ -38,6 +47,8 @@ const BudgetProgressCard = () => {
   const [offset, setOffset] = useState(0);
 
   const { start, end } = getFortnightRange(offset);
+  const pace = getPacePercent(start, end);
+  const isCurrentPeriod = offset === 0;
 
   const categories = (settings.budget_goals || []).map(goal => {
     const names = new Set([goal.name, ...(goal.aliases || [])]);
@@ -50,7 +61,7 @@ const BudgetProgressCard = () => {
       .reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const percentage = fortnightBudget > 0 ? (spent / fortnightBudget) * 100 : 0;
     return { name: goal.name, icon: goal.icon, budget: fortnightBudget, amount: spent, percentage };
-  }).filter(cat => cat.amount > 0);
+  });
 
   if (!categories?.length) return (
     <div className="bg-bg-card rounded-2xl p-3 shadow-sm h-full flex items-center justify-center">
@@ -65,16 +76,23 @@ const BudgetProgressCard = () => {
       </div>
 
       {/* Fortnight toggle */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <button
           onClick={() => setOffset(o => o - 1)}
           className="w-6 h-6 flex items-center justify-center rounded-lg text-text-secondary hover:bg-bg-primary hover:text-text-primary transition-all"
         >
           <HiChevronLeft className="text-sm" />
         </button>
-        <span className="text-xs font-medium text-text-secondary">
-          {fmt(start)} – {fmt(end)}
-        </span>
+        <div className="text-center">
+          <span className="text-xs font-medium text-text-secondary">
+            {fmt(start)} – {fmt(end)}
+          </span>
+          {isCurrentPeriod && (
+            <div className="text-[10px] text-text-secondary mt-0.5">
+              {pace.toFixed(0)}% of period elapsed
+            </div>
+          )}
+        </div>
         <button
           onClick={() => setOffset(o => o + 1)}
           disabled={offset >= 0}
@@ -102,17 +120,29 @@ const BudgetProgressCard = () => {
                   </span>
                 </div>
               </div>
-              <div className="w-full h-1.5 bg-border rounded overflow-hidden">
+              <div className="w-full h-2 bg-border rounded overflow-hidden relative">
                 <div
                   className="h-full rounded transition-all duration-500 ease-out"
                   style={{
                     width: `${Math.min(category.percentage, 100)}%`,
-                    backgroundColor: getStatusColor(category.percentage),
+                    backgroundColor: getStatusColor(category.percentage, isCurrentPeriod ? pace : 100),
                   }}
                 />
+                {/* Pace marker — where you should be today */}
+                {isCurrentPeriod && pace > 0 && pace < 100 && (
+                  <div
+                    className="absolute top-0 h-full w-0.5 bg-white opacity-80"
+                    style={{ left: `${pace}%` }}
+                  />
+                )}
               </div>
               <div className="text-[10px] text-text-secondary mt-0.5">
-                {category.percentage.toFixed(1)}% used
+                {category.percentage.toFixed(0)}% used
+                {isCurrentPeriod && category.percentage > pace + 5 && (
+                  <span className="ml-1 text-orange-400 font-medium">
+                    · ${((category.percentage - pace) / 100 * category.budget).toFixed(0)} ahead of pace
+                  </span>
+                )}
               </div>
             </div>
           ))}

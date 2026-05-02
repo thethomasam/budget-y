@@ -65,15 +65,11 @@ const KPICards = () => {
   const remaining = monthlyBudget - currentMonthExpense;
   const budgetUsedPct = monthlyBudget > 0 ? ((currentMonthExpense / monthlyBudget) * 100).toFixed(1) : 0;
 
-  const ytdIncome = transactions
-    .filter(t => t.amount > 0 && new Date(t.date).getFullYear() === new Date().getFullYear())
-    .reduce((sum, t) => sum + t.amount, 0);
-  const ytdExpenses = transactions
-    .filter(t => t.amount < 0 && new Date(t.date).getFullYear() === new Date().getFullYear())
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const ytdSavings = ytdIncome - ytdExpenses;
-
-  const sparkline = monthlyExpenses.map(m => ({ amount: m.amount }));
+  const avgMonthly = monthlyExpenses.length
+    ? monthlyExpenses.reduce((sum, m) => sum + m.amount, 0) / monthlyExpenses.length
+    : 0;
+  const lastMonth = monthlyExpenses[monthlyExpenses.length - 2]?.amount || 0;
+  const avgDiff = avgMonthly > 0 ? (((currentMonthExpense - avgMonthly) / avgMonthly) * 100).toFixed(1) : 0;
 
   return (
     <>
@@ -84,7 +80,6 @@ const KPICards = () => {
         changeType={remaining >= 0 ? 'positive' : 'negative'}
         icon="💰"
         color="#5B6FED"
-        sparklineData={sparkline}
       />
       <KPICard
         title="Monthly Spending"
@@ -95,12 +90,12 @@ const KPICards = () => {
         color="#FF6B9D"
       />
       <KPICard
-        title="Total Saved (YTD)"
-        value={`$${Math.max(0, ytdSavings).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        change="Year to date"
-        changeType="positive"
-        icon="💎"
-        color="#4CAF50"
+        title="Avg Monthly Spend"
+        value={`$${avgMonthly.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        change={avgDiff > 0 ? `${avgDiff}% above average this month` : `${Math.abs(avgDiff)}% below average this month`}
+        changeType={avgDiff > 0 ? 'negative' : 'positive'}
+        icon="📊"
+        color="#FFC542"
       />
     </>
   );

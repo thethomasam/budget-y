@@ -1,4 +1,3 @@
-import io
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -13,12 +12,13 @@ from app.config import config
 from app.database import get_db
 from app.models import Transaction
 from app.schemas.transaction import TransactionCreate
+from app.services.csv_parser import CSVParser
 from app.services.qwen_categoriser import categorise_transaction
 from app.tasks.csv_upload import process_csv, categorise_single
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
-PROC = config["processing"]
+QUEUE = config["processing"]
 REDIS_URL = config["redis"]["url"]
 
 
@@ -29,48 +29,37 @@ async def upload_csv(file: UploadFile = File(...)):
 
     contents = await file.read()
 
-    if len(contents) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+    try:
+        transactions = CSVParser.parse(contents.decode("utf-8"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    text = contents.decode("utf-8")
-    first_cell = text.split(",")[0].strip().strip('"')
+    if not transactions:
+        raise HTTPException(status_code=400, detail="No valid transactions found in file")
 
-    # Detect ANZ headerless format: first cell looks like a date (DD/MM/YYYY)
-    import re as _re
-    if _re.match(r"\d{2}/\d{2}/\d{4}", first_cell):
-        # ANZ format: Date, Amount, Description (no header, amounts may be quoted/negative)
-        df = pd.read_csv(io.StringIO(text), header=None, names=["Date", "Amount", "Description"])
-        df["Amount"] = df["Amount"].astype(str).str.replace('"', '').astype(float)
-    else:
-        df = pd.read_csv(io.StringIO(text))
-        required_columns = ["Date", "Description", "Amount"]
-        if not all(col in df.columns for col in required_columns):
-            raise HTTPException(status_code=400, detail=f"CSV must contain columns: {', '.join(required_columns)}")
-
-    # Save file to disk
-    upload_dir = Path(PROC["upload_dir"])
+    # Save parsed transactions to disk
+    upload_dir = Path(QUEUE["upload_dir"])
     upload_dir.mkdir(parents=True, exist_ok=True)
     job_id = str(uuid.uuid4())
     file_path = upload_dir / f"{job_id}.csv"
-    df.to_csv(file_path, index=False)
+    pd.DataFrame([{"Date": t.date, "Description": t.merchant, "Amount": t.amount} for t in transactions]).to_csv(file_path, index=False)
+
+    total = len(transactions)
 
     # Initialise job status in Redis
     r = redis_lib.from_url(REDIS_URL)
     r.hset(f"job:{job_id}", mapping={
-        "total": len(df),
+        "total": total,
         "status": "processing",
-        "rule_categorised": 0,
-        "llm_queued": 0,
-        "llm_done": 0,
+        "done": 0,
         "failed": 0,
-        "orchestrator_done": 0,
     })
-    r.expire(f"job:{job_id}", PROC["job_ttl"])
+    r.expire(f"job:{job_id}", QUEUE["job_ttl"])
     r.close()
 
-    process_csv.delay(job_id, str(file_path), len(df))
+    process_csv.delay(job_id, str(file_path), total)
 
-    return {"job_id": job_id, "total": len(df), "status": "queued"}
+    return {"job_id": job_id, "total": total, "status": "queued"}
 
 
 @router.get("/upload-csv/{job_id}")

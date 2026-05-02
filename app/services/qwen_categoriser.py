@@ -32,10 +32,13 @@ def find_similar_transaction(merchant: str, db: Session) -> Optional[str]:
     normalized = normalize_transaction(merchant)
     first_word = normalized.split()[0] if normalized else ""
 
-    for txn in db.query(Transaction).filter(
+    candidates = db.query(Transaction).filter(
         Transaction.category.isnot(None),
-        Transaction.category != ""
-    ).all():
+        Transaction.category != "",
+        Transaction.merchant.ilike(f"%{first_word}%") if first_word else True,
+    ).all()
+
+    for txn in candidates:
         if not txn.merchant:
             continue
         norm_db = normalize_transaction(txn.merchant)

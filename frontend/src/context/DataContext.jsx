@@ -112,9 +112,12 @@ export const DataProvider = ({ children }) => {
   };
 
   const getCurrentMonthExpense = () => {
-    const currentMonth = new Date().getMonth();
+    const now = new Date();
     return transactions
-      .filter(t => new Date(t.date).getMonth() === currentMonth)
+      .filter(t => {
+        const d = new Date(t.date);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      })
       .reduce((sum, t) => sum + Math.abs(t.amount), 0);
   };
 

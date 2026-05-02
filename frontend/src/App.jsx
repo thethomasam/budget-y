@@ -6,8 +6,7 @@ import KPICards from './components/KPICards';
 import CategoryBreakdownCard from './components/PaymentsCard';
 import BudgetProgressCard from './components/BudgetProgressCard';
 import SpendingTrendCard from './components/SaleCard';
-import SavingsTrendCard from './components/SavingsTrendCard';
-import RecentTransactionsCard from './components/RecentTransactionsCard';
+import SpendingHeatmap from './components/SpendingHeatmap';
 import TransactionsView from './components/TransactionsView';
 import { AiFillHome } from 'react-icons/ai';
 import { BiWallet } from 'react-icons/bi';
@@ -28,17 +27,16 @@ function Dashboard() {
         <KPICards />
       </div>
 
-      {/* Row 2: Category Breakdown + Budget vs Actual + Recent Transactions */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
+      {/* Row 2: Category Breakdown + Budget vs Actual */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
         <CategoryBreakdownCard />
         <BudgetProgressCard />
-        <RecentTransactionsCard />
       </div>
 
       {/* Row 3: Spending Trend + Savings Trend */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <SpendingTrendCard />
-        <SavingsTrendCard />
+        <SpendingHeatmap />
       </div>
     </div>
   );

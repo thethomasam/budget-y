@@ -1,0 +1,11 @@
+merchant,normalized,amount,category,method,duration_s
+BOTTEGA BANDITO         PROSPECT,bottega bandito prospect,75.62,Dining & Food,db_match,0.004
+CHASKA CHAAT KA PTY L 1 PROSPECT,chaska chaat ka l 1 prospect,13.16,Other,db_match,0.003
+ADE050 S808711          Adelaide,ade050 s808711 adelaide,8.0,Groceries,db_match,0.001
+ZLR*THE CHEESECAKE SHOP PROSPECT,zlr the cheesecake shop prospect,12.95,Food & Groceries,web+llm,49.574
+APPLE.COM/BILL          SYDNEY,apple com bill sydney,5.98,Entertainment & Subscriptions,db_match,0.004
+ZLR*BANGKOK SNAP - CHUR KILLBURN,zlr bangkok snap chur killburn,68.72,Food & Groceries,web+llm,12.088
+BUPA HI PTY LTD         MELBOURNE,bupa hi melbourne,161.08,Other,db_match,0.002
+ZIPPYS CAR WASH         PROSPECT,zippys car wash prospect,8.3,Auto & Fuel,db_match,0.001
+BPAY PAYMENT-THANK YOU REC # 6067110726,bpay payment thank you rec 6067110726,-1079.0,Bills & Utilities,web+llm,12.8
+APPLE.COM/BILL          SYDNEY,apple com bill sydney,4.49,Entertainment & Subscriptions,db_match,0.004

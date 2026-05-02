@@ -6,10 +6,16 @@ const TransactionsView = () => {
   const { transactions, loading, deleteTransaction, refetch } = useData();
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
-  const [search, setSearch] = useState('');
+  const [filterFrom, setFilterFrom] = useState(() => localStorage.getItem('filter_from') || '');
+  const [filterTo, setFilterTo] = useState(() => localStorage.getItem('filter_to') || '');
+  const [filterCategory, setFilterCategory] = useState(() => localStorage.getItem('filter_category') || '');
+  const [search, setSearch] = useState(() => localStorage.getItem('filter_search') || '');
+
+  const setFilter = (key, setter) => (val) => {
+    setter(val);
+    if (val) localStorage.setItem(key, val);
+    else localStorage.removeItem(key);
+  };
   const [selected, setSelected] = useState(new Set());
   const [bulkCategory, setBulkCategory] = useState('');
   const fileInputRef = useRef(null);
@@ -166,25 +172,25 @@ const TransactionsView = () => {
           type="text"
           placeholder="Search merchant…"
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => setFilter('filter_search', setSearch)(e.target.value)}
           className="bg-bg-card border border-border rounded-xl px-3 py-2 text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-primary-blue w-48"
         />
         <input
           type="date"
           value={filterFrom}
-          onChange={e => setFilterFrom(e.target.value)}
+          onChange={e => setFilter('filter_from', setFilterFrom)(e.target.value)}
           className="bg-bg-card border border-border rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary-blue"
         />
         <span className="text-text-secondary text-sm">to</span>
         <input
           type="date"
           value={filterTo}
-          onChange={e => setFilterTo(e.target.value)}
+          onChange={e => setFilter('filter_to', setFilterTo)(e.target.value)}
           className="bg-bg-card border border-border rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary-blue"
         />
         <select
           value={filterCategory}
-          onChange={e => setFilterCategory(e.target.value)}
+          onChange={e => setFilter('filter_category', setFilterCategory)(e.target.value)}
           className="bg-bg-card border border-border rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary-blue"
         >
           <option value="">All categories</option>
@@ -192,7 +198,10 @@ const TransactionsView = () => {
         </select>
         {(filterFrom || filterTo || filterCategory || search) && (
           <button
-            onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterCategory(''); setSearch(''); }}
+            onClick={() => {
+              setFilterFrom(''); setFilterTo(''); setFilterCategory(''); setSearch('');
+              ['filter_from', 'filter_to', 'filter_category', 'filter_search'].forEach(k => localStorage.removeItem(k));
+            }}
             className="text-sm text-text-secondary hover:text-text-primary transition-colors"
           >
             Clear
@@ -297,9 +306,11 @@ const TransactionsView = () => {
                   <div className="flex items-center justify-between flex-1 min-w-0">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div
-                        className="w-11 h-11 rounded-xl flex-shrink-0"
+                        className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center text-xl"
                         style={{ backgroundColor: transaction.color + '20' }}
-                      />
+                      >
+                        {transaction.icon}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[15px] font-medium text-text-primary mb-1 overflow-hidden text-ellipsis whitespace-nowrap">
                           {transaction.merchant}

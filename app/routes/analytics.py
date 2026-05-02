@@ -88,7 +88,8 @@ def get_monthly_savings(db: Session = Depends(get_db)):
         func.strftime('%Y-%m', Transaction.date).label('month'),
         func.sum(Transaction.amount).label('total')
     ).filter(
-        Transaction.date >= twelve_months_ago
+        Transaction.date >= twelve_months_ago,
+        Transaction.amount > 0
     ).group_by('month').order_by('month').all()
 
     monthly_data = []
@@ -112,7 +113,8 @@ def get_monthly_expenses(db: Session = Depends(get_db)):
         func.strftime('%Y-%m', Transaction.date).label('month'),
         func.sum(Transaction.amount).label('total')
     ).filter(
-        Transaction.date >= twelve_months_ago
+        Transaction.date >= twelve_months_ago,
+        Transaction.amount > 0
     ).group_by('month').order_by('month').all()
 
     monthly_data = []
