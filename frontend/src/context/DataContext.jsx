@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 
 const DataContext = createContext();
 
@@ -11,6 +12,8 @@ export const useData = () => {
 };
 
 export const DataProvider = ({ children }) => {
+  const { token } = useAuth();
+  const authHeader = { Authorization: `Bearer ${token}` };
   const [transactions, setTransactions] = useState([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [monthlyExpenses, setMonthlyExpenses] = useState([]);
@@ -26,9 +29,9 @@ export const DataProvider = ({ children }) => {
       setError(null);
 
       const [transactionsRes, categoryRes, monthlyRes] = await Promise.all([
-        fetch('/api/transactions?limit=5000'),
-        fetch('/api/analytics/category-breakdown'),
-        fetch('/api/analytics/monthly-expenses')
+        fetch('/api/transactions?limit=5000', { headers: authHeader }),
+        fetch('/api/analytics/category-breakdown', { headers: authHeader }),
+        fetch('/api/analytics/monthly-expenses', { headers: authHeader }),
       ]);
 
       if (!transactionsRes.ok || !categoryRes.ok || !monthlyRes.ok) {
@@ -41,15 +44,14 @@ export const DataProvider = ({ children }) => {
         throw new Error(`Failed to fetch data from API: ${JSON.stringify(errorDetails)}`);
       }
 
-      const monthlyCatData = await fetch('/api/analytics/monthly-category-spend')
+      const monthlyCatData = await fetch('/api/analytics/monthly-category-spend', { headers: authHeader })
         .then(r => r.ok ? r.json() : null)
         .catch(() => null);
 
-      const monthlySavingsData = await fetch('/api/analytics/monthly-savings')
+      const monthlySavingsData = await fetch('/api/analytics/monthly-savings', { headers: authHeader })
         .then(r => r.ok ? r.json() : null)
         .catch(() => null);
 
-      // Settings is optional — use defaults if it fails
       const settingsData = await fetch('/api/settings')
         .then(r => r.ok ? r.json() : null)
         .catch(() => null);
@@ -99,7 +101,7 @@ export const DataProvider = ({ children }) => {
   };
 
   const deleteTransaction = async (id) => {
-    await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+    await fetch(`/api/transactions/${id}`, { method: 'DELETE', headers: authHeader });
     fetchData();
   };
 

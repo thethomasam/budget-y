@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { DataProvider, useData } from './context/DataContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import LoginPage from './components/LoginPage';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import KPICards from './components/KPICards';
@@ -42,8 +44,11 @@ function Dashboard() {
   );
 }
 
-function App() {
+function AuthenticatedApp() {
+  const { isAuthenticated } = useAuth();
   const [activeView, setActiveView] = useState('dashboard');
+
+  if (!isAuthenticated) return <LoginPage />;
 
   return (
     <DataProvider>
@@ -81,6 +86,14 @@ function App() {
         </nav>
       </div>
     </DataProvider>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AuthenticatedApp />
+    </AuthProvider>
   );
 }
 

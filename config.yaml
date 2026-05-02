@@ -24,43 +24,43 @@ frontend:
 budget_goals:
   - name: "Groceries"
     icon: "🛒"
-    budget: 150
+    budget: 220   # avg $197, max $302 — nudged up slightly for comfort
     aliases: ["Groceries", "Supermarket"]
   - name: "Dining & Food"
     icon: "🍽️"
-    budget: 200
+    budget: 300   # avg $209 but trending up to $400 — set as a stretch target
     aliases: ["Dining & Food", "Food & Dining", "Restaurants"]
   - name: "Petrol & Fuel"
     icon: "⛽"
-    budget: 70
+    budget: 70    # avg $36, max $87 — covers worst month
     aliases: ["Petrol", "Fuel", "Auto & Fuel"]
   - name: "Transport & Travel"
     icon: "🚗"
-    budget: 80
+    budget: 80    # avg $130 driven by one big Dec trip — normal months ~$50
     aliases: ["Transport & Travel", "Transportation", "Rideshare", "Public Transport", "Parking"]
   - name: "Shopping"
     icon: "🛍️"
-    budget: 200
+    budget: 250   # avg $232 ex-LIFE REWARDS anomaly
     aliases: ["Shopping & Retail"]
   - name: "Bills & Utilities"
     icon: "💡"
-    budget: 300
+    budget: 120   # avg $75, high months hit $205 — set buffer
     aliases: ["Utilities & Bills", "Banking & Transfers"]
   - name: "Entertainment"
     icon: "🎬"
-    budget: 100
+    budget: 60    # avg $55
     aliases: ["Entertainment & Subscriptions", "Movies"]
   - name: "Health & Wellness"
     icon: "🏥"
-    budget: 200
+    budget: 160   # avg $174 on active months (BUPA + occasional GP)
     aliases: ["Insurance & Healthcare", "Medical & Pharmacy", "Health & Fitness"]
   - name: "Travel"
     icon: "✈️"
-    budget: 300
+    budget: 150   # sporadic — set as a monthly set-aside
     aliases: ["Travel & Accommodation"]
   - name: "Other"
     icon: "📦"
-    budget: 200
+    budget: 150   # avg $275 but last 2 months $0 — watch this category
     aliases: ["Education & Learning", "Home & Hardware"]
 
 processing:

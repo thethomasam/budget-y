@@ -68,7 +68,7 @@ def categorise_single(transaction_id: int, merchant: str, amount: float, job_id:
 
 
 @celery_app.task
-def process_csv(job_id: str, file_path: str, total: int):
+def process_csv(job_id: str, file_path: str, total: int, user_id: int):
     """Save all rows immediately as Other, then dispatch one categorise task per transaction."""
     r = get_redis()
     db = SessionLocal()
@@ -82,6 +82,7 @@ def process_csv(job_id: str, file_path: str, total: int):
                     category="Other",
                     amount=abs(float(row.Amount)),
                     card=str(getattr(row, "Card", "")),
+                    user_id=user_id,
                 )
                 db.add(txn)
                 db.flush()
