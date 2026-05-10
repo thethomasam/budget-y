@@ -1,8 +1,10 @@
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 
 const Header = () => {
   const { settings } = useData();
-  const userName = settings?.user?.name || '';
+  const { logout, username } = useAuth();
+  const userName = settings?.user?.name || username || '';
 
   return (
     <header className="flex justify-between items-start mb-4">
@@ -15,8 +17,16 @@ const Header = () => {
         </p>
       </div>
 
-      <div className="w-12 h-12 rounded-full bg-bg-card flex items-center justify-center border-2 border-border text-2xl select-none">
-        🦕
+      <div className="flex items-center gap-3">
+        <button
+          onClick={logout}
+          className="text-sm text-text-secondary hover:text-text-primary border border-border rounded-lg px-3 py-1.5 transition-colors hover:bg-bg-card"
+        >
+          Logout
+        </button>
+        <div className="w-12 h-12 rounded-full bg-bg-card flex items-center justify-center border-2 border-border text-2xl select-none">
+          🦕
+        </div>
       </div>
     </header>
   );

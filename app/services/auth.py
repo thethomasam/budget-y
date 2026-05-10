@@ -4,7 +4,7 @@ from typing import Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -48,3 +48,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if not user:
         raise credentials_error
     return user
+
+
+def get_user_from_api_key_or_token(
+    x_api_key: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    """Accept either X-Api-Key header or Bearer token."""
+    if x_api_key:
+        user = db.query(User).filter(User.api_key == x_api_key).first()
+        if user:
+            return user
+    raise HTTPException(status_code=401, detail="Provide a valid X-Api-Key header")

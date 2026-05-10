@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -36,3 +38,17 @@ def login(body: AuthRequest, db: Session = Depends(get_db)):
 @router.get("/me")
 def me(current_user: User = Depends(get_current_user)):
     return {"id": current_user.id, "username": current_user.username}
+
+
+@router.post("/api-key")
+def generate_api_key(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    current_user.api_key = secrets.token_urlsafe(32)
+    db.commit()
+    return {"api_key": current_user.api_key}
+
+
+@router.get("/api-key")
+def get_api_key(current_user: User = Depends(get_current_user)):
+    if not current_user.api_key:
+        raise HTTPException(status_code=404, detail="No API key yet — POST /api/auth/api-key to generate one")
+    return {"api_key": current_user.api_key}

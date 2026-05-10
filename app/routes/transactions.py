@@ -1,17 +1,18 @@
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 import redis as redis_lib
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.config import config
 from app.database import get_db
 from app.models import Transaction, User
 from app.schemas.transaction import TransactionCreate
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, get_user_from_api_key_or_token
 from app.services.csv_parser import CSVParser
 from app.tasks.csv_upload import process_csv, categorise_single
 
@@ -77,7 +78,11 @@ def get_transactions(skip: int = 0, limit: int = 5000, db: Session = Depends(get
 
 
 @router.post("")
-async def add_transaction(body: TransactionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def add_transaction(
+    body: TransactionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_api_key_or_token),
+):
     if not body.merchant:
         raise HTTPException(status_code=400, detail="Merchant is required")
     if body.amount is None:
