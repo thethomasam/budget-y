@@ -1,6 +1,7 @@
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Form
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -28,11 +29,12 @@ def register(body: AuthRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-def login(body: AuthRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == body.username).first()
-    if not user or not verify_password(body.password, user.hashed_password):
+def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    return {"token": create_token(user.id, user.username), "username": user.username}
+    token = create_token(user.id, user.username)
+    return {"access_token": token, "token_type": "bearer", "token": token, "username": user.username}
 
 
 @router.get("/me")

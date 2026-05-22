@@ -9,10 +9,11 @@ export const AuthProvider = ({ children }) => {
   const [username, setUsername] = useState(() => localStorage.getItem('username'));
 
   const login = async (username, password) => {
+    const body = new URLSearchParams({ username, password });
     const res = await fetch('/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
     });
     if (!res.ok) throw new Error((await res.json()).detail || 'Login failed');
     const data = await res.json();
