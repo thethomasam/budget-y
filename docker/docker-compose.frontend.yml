@@ -1,12 +1,12 @@
 services:
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile.frontend
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
     volumes:
-      - ./frontend:/app
+      - ../frontend:/app
       - /app/node_modules
     environment:
       - VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://localhost:8000}
