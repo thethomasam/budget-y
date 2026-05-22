@@ -1,6 +1,20 @@
-version: '3.8'
-
 services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-budgety}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-budgety}
+      POSTGRES_DB: ${POSTGRES_DB:-budgety}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-budgety}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     ports:
@@ -27,11 +41,16 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
-      - ./budgety.db:/app/budgety.db
       - uploads:/tmp/budgety_uploads
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://budgety:budgety@db:5432/budgety}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434/api/generate}
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_started
       ollama:
@@ -44,11 +63,16 @@ services:
       dockerfile: Dockerfile.backend
     volumes:
       - .:/app
-      - ./budgety.db:/app/budgety.db
       - uploads:/tmp/budgety_uploads
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://budgety:budgety@db:5432/budgety}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434/api/generate}
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_started
       ollama:
@@ -64,10 +88,13 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    environment:
+      - VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://backend:8000}
     command: npm run dev -- --host
     depends_on:
       - backend
 
 volumes:
+  pg_data:
   ollama_data:
   uploads:

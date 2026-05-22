@@ -6,7 +6,7 @@ __pycache__/
 .Python
 *.pyc
 *.pyo
-
+/memory
 # Jupyter Notebook
 .ipynb_checkpoints
 *.ipynb
@@ -43,4 +43,5 @@ frontend/build/
 
 # OS
 .DS_Store
-Thumbs.dbANZ-*.csv
+Thumbs.db
+ANZ-*.csv

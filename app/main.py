@@ -2,11 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import config
-from app.database import Base, engine
 from app.routes import transactions_router, categories_router, analytics_router, settings_router, auth_router
-
-# Create database tables
-Base.metadata.create_all(bind=engine)
 
 app_config = config["app"]
 app = FastAPI(

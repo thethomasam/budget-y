@@ -1,29 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import distinct
 
 from app.database import get_db
 from app.models import Transaction
 from app.schemas import CategoryUpdate, BulkCategoryUpdate
 
 router = APIRouter(prefix="/categories", tags=["categories"])
-
-
-@router.get("")
-def get_categories(db: Session = Depends(get_db)):
-    """Get all unique categories from transactions"""
-    categories = db.query(distinct(Transaction.category)).filter(
-        Transaction.category.isnot(None),
-        Transaction.category != ""
-    ).order_by(Transaction.category).all()
-
-    # Extract category names from tuples
-    category_list = [cat[0] for cat in categories]
-
-    return {
-        "categories": category_list,
-        "count": len(category_list)
-    }
 
 
 @router.patch("/transactions/{transaction_id}")

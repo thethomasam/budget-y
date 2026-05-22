@@ -5,10 +5,10 @@ from typing import Optional
 
 import pandas as pd
 import redis as redis_lib
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.config import config
+from app.config import config, REDIS_URL
 from app.database import get_db
 from app.models import Transaction, User
 from app.schemas.transaction import TransactionCreate
@@ -19,7 +19,6 @@ from app.tasks.csv_upload import process_csv, categorise_single
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 QUEUE = config["processing"]
-REDIS_URL = config["redis"]["url"]
 
 
 @router.post("/upload-csv")

@@ -9,14 +9,12 @@ import pandas as pd
 import redis as redis_lib
 
 from app.celery_app import celery_app
-from app.config import config
+from app.config import config, REDIS_URL
 from app.database import SessionLocal
 from app.models import Transaction
-from app.services.qwen_categoriser import find_similar_transaction, categorise_transaction
+from app.services.qwen_categoriser import find_similar_transaction, categorise_transaction, batch_categorise_with_llm
 
 QUEUE = config["processing"]
-REDIS_URL = config["redis"]["url"]
-
 
 
 def get_redis():
@@ -39,7 +37,7 @@ def _save_category(db, transaction_id: int, category: str):
 
 @celery_app.task
 def categorise_single(transaction_id: int, merchant: str, amount: float, job_id: Optional[str] = None):
-    """Categorise a single transaction. If job_id provided, updates Redis progress."""
+    """Categorise a single transaction (used for manual adds). If job_id provided, updates Redis progress."""
     r = get_redis() if job_id else None
     db = SessionLocal()
     try:
@@ -69,25 +67,50 @@ def categorise_single(transaction_id: int, merchant: str, amount: float, job_id:
 
 @celery_app.task
 def process_csv(job_id: str, file_path: str, total: int, user_id: int):
-    """Save all rows immediately as Other, then dispatch one categorise task per transaction."""
+    """Save all rows, fuzzy-match known merchants, then batch-LLM the rest."""
     r = get_redis()
     db = SessionLocal()
     try:
+        # Phase 1: persist all rows as "Other"
+        pending = []
         for chunk in pd.read_csv(file_path, chunksize=QUEUE["chunk_size"]):
             for row in chunk.itertuples():
                 merchant = str(row.Description)
+                amount = abs(float(row.Amount))
                 txn = Transaction(
                     date=datetime.strptime(str(row.Date), "%d/%m/%Y").date(),
                     merchant=merchant,
                     category="Other",
-                    amount=abs(float(row.Amount)),
+                    amount=amount,
                     card=str(getattr(row, "Card", "")),
                     user_id=user_id,
                 )
                 db.add(txn)
                 db.flush()
-                categorise_single.delay(txn.id, merchant, abs(float(row.Amount)), job_id)
+                pending.append((txn.id, merchant, amount))
             db.commit()
+
+        # Phase 2: fuzzy-match against existing categorised transactions
+        to_llm = []
+        for txn_id, merchant, amount in pending:
+            category = find_similar_transaction(merchant, db)
+            if category:
+                _save_category(db, txn_id, category)
+                r.hincrby(f"job:{job_id}", "done", 1)
+            else:
+                to_llm.append({"idx": txn_id, "merchant": merchant, "amount": amount})
+
+        # Phase 3: batch LLM for unmatched transactions
+        batch_size = QUEUE["llm_batch_size"]
+        for i in range(0, len(to_llm), batch_size):
+            batch = to_llm[i:i + batch_size]
+            results = asyncio.run(batch_categorise_with_llm(batch))
+            for item in batch:
+                category = results.get(str(item["idx"]), "Other")
+                _save_category(db, item["idx"], category)
+                r.hincrby(f"job:{job_id}", "done", 1)
+
+        _update_job(r, job_id, status="complete")
     except Exception as e:
         db.rollback()
         _update_job(r, job_id, status="failed", error=str(e))

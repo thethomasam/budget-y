@@ -2,17 +2,12 @@ import os
 import re
 import json
 import asyncio
-import yaml
 import httpx
 from difflib import SequenceMatcher
-from pathlib import Path
 from typing import Optional
 from sqlalchemy.orm import Session
+from app.config import config
 from app.models import Transaction
-
-config_path = Path(__file__).parent.parent.parent / "config.yaml"
-with open(config_path) as f:
-    config = yaml.safe_load(f)
 
 CATEGORIES = [g["name"] for g in config["budget_goals"]]
 LLM_CONFIG = config["llm"]
@@ -53,7 +48,6 @@ def find_similar_transaction(merchant: str, db: Session) -> Optional[str]:
 
 
 async def web_search_merchant(merchant: str) -> str:
-    """Search web for merchant context using Tavily."""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -69,20 +63,17 @@ async def web_search_merchant(merchant: str) -> str:
             if results:
                 print(f"Search OK: '{merchant}' — {len(results)} result(s)")
                 return "\n".join(f"{r['title']}: {r['content'][:200]}" for r in results)
-            else:
-                print(f"Search OK: '{merchant}' — no results")
-                return ""
+            print(f"Search OK: '{merchant}' — no results")
+            return ""
     except Exception as e:
         print(f"Search FAILED: '{merchant}' — {e}")
         return ""
 
 
 async def batch_categorise_with_llm(rows: list) -> dict:
-    """Categorise a batch of transactions with web search context per merchant.
-    rows: [{"idx": int, "merchant": str, "amount": float}, ...]
-    returns: {"1": "Food & Groceries", ...}
+    """rows: [{"idx": int, "merchant": str, "amount": float}, ...]
+    returns: {str(idx): category, ...}
     """
-    # Search all merchants concurrently
     contexts = await asyncio.gather(*[web_search_merchant(r["merchant"]) for r in rows])
 
     lines = "\n".join(
@@ -118,7 +109,7 @@ Return ONLY valid JSON: {{"1": "Category", "2": "Category"}}"""
 
 
 async def categorise_transaction(merchant: str, amount: float, db: Session) -> str:
-    """Categorise a single transaction: DB match first, then web search + LLM."""
+    """Single transaction: fuzzy DB match first, then web search + LLM."""
     category = find_similar_transaction(merchant, db)
     if category:
         return category
