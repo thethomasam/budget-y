@@ -2,72 +2,110 @@
 
 Personal finance tracker. Import bank CSVs, auto-categorise transactions with a local LLM, and view spending breakdowns on a dashboard. Self-hosted, no bank APIs.
 
-Frontend was built with Claude Code (Anthropic).
-
 ## What it does
 
 - Import transactions via CSV upload or log them manually via iOS Shortcut
-- Auto-categorises merchants using fuzzy matching against past transactions, then falls back to a web search + local LLM (Qwen3 via Ollama) for unknowns
+- Auto-categorises merchants using fuzzy matching against past transactions, then falls back to web search + local LLM (Qwen3 via Ollama) for unknowns
 - Dashboard with monthly spend by category, budget vs actual, savings trend
-- Edit/bulk-change categories, filter and search transactions
+- Edit and bulk-change categories, filter and search transactions
 
 ## How categorisation works
 
 1. **Fuzzy match** — normalises the merchant name and checks against existing categorised transactions (SequenceMatcher, threshold 0.8). Fast, no LLM needed.
-2. **LLM fallback** — unmatched merchants are batched (10 at a time), each gets a Tavily web search for context, then sent to `qwen3:8b` running locally via Ollama. Returns a JSON map of categories.
-3. Transactions are saved immediately with `"Other"` so nothing is lost if the LLM is slow or fails. Category is updated once the LLM responds.
-
-## Architecture
-
-```mermaid
-graph TD
-    Browser -->|HTTPS| Nginx
-    iPhone -->|POST /api/shortcut/| Nginx
-    Nginx -->|oauth2-proxy auth| GitHub
-    Nginx -->|/app/| Vite["Frontend (Vite :5173)"]
-    Nginx -->|/api/| Vite
-    Vite -->|proxy /api| FastAPI["Backend (FastAPI :8000)"]
-
-    FastAPI -->|read/write| SQLite[(SQLite)]
-    FastAPI -->|enqueue task| Redis[(Redis)]
-    Redis -->|dequeue| Celery["Celery Worker"]
-
-    Celery -->|fuzzy match| SQLite
-    Celery -->|merchant context| Tavily["Tavily Search API"]
-    Celery -->|categorise batch| Ollama["Ollama (qwen3:8b)"]
-    Celery -->|save result| SQLite
-```
+2. **Batch LLM fallback** — unmatched merchants are batched (10 at a time), each gets a Tavily web search for context, then sent to `qwen3:8b` via Ollama. Returns a JSON map of categories.
+3. Transactions are saved immediately as `"Other"` so nothing is lost if the LLM is slow or fails. Category is updated once the worker responds.
 
 ## Stack
 
-- **Backend** — FastAPI, SQLite, SQLAlchemy, Celery + Redis
-- **Frontend** — React, Vite, Tailwind, Recharts
-- **LLM** — Ollama (`qwen3:8b`)
-- **Search** — Tavily API
-- **Infra** — Docker Compose, Nginx, oauth2-proxy (GitHub OAuth)
+| Layer | Tech |
+|---|---|
+| Backend | FastAPI, PostgreSQL, SQLAlchemy, Celery + Redis |
+| Frontend | React, Vite, Tailwind, Recharts |
+| LLM | Ollama (`qwen3:8b`) |
+| Search | Tavily API |
+| Infra | Docker Compose, Nginx, oauth2-proxy |
+
+## Architecture
+
+Services run on separate machines connected via Tailscale — all URLs configured via env vars.
+
+```mermaid
+flowchart TB
+    subgraph internet["Internet"]
+        Browser
+        iPhone
+    end
+
+    subgraph tailscale["Tailscale Network"]
+        subgraph oracle["Oracle Cloud"]
+            Backend["FastAPI\n:8000"]
+            Celery["Celery Worker"]
+            Redis["Redis\n:6379"]
+            PostgreSQL["PostgreSQL\n:5432"]
+        end
+
+        subgraph local["Local Machine"]
+            Frontend["Vite Frontend\n:5173"]
+            Ollama["Ollama\nqwen3:8b"]
+        end
+    end
+
+    Tavily["Tavily Search"]
+
+    Browser -->|"HTTP"| Frontend
+    iPhone -->|"X-Api-Key"| Backend
+    Frontend -->|"proxy /api"| Backend
+    Backend --> PostgreSQL
+    Backend --> Redis
+    Redis --> Celery
+    Celery --> Ollama
+    Celery --> Tavily
+    Celery --> PostgreSQL
+```
 
 ## Deployment
 
-Everything runs in Docker Compose. Nginx sits in front and proxies to the Vite dev server, with GitHub OAuth via oauth2-proxy protecting all routes.
+### All-in-one (local dev)
 
 ```bash
-cp .env.example .env        # fill in TAVILY_API_KEY, GitHub OAuth creds
+cp .env.example .env        # fill in TAVILY_API_KEY
 docker compose up -d
+docker compose exec backend alembic upgrade head
 ```
 
-Services:
-| Service | Port | Notes |
-|---|---|---|
-| Frontend (Vite) | 5173 | proxied via Nginx at `/app/` |
-| Backend (FastAPI) | 8000 | API at `/api/` |
-| Ollama | 11434 | needs `qwen3:8b` pulled |
-| Redis | 6379 | Celery broker |
+Pull the model on first run:
+```bash
+docker compose exec ollama ollama pull qwen3:8b
+```
 
-Nginx listens on port 80. All routes require GitHub OAuth except `/api/shortcut/` which uses an API key header for iOS Shortcuts.
+### Distributed (separate machines)
+
+Each service has its own compose file in `docker/`:
+
+| File | Runs | Machine |
+|---|---|---|
+| `docker-compose.db.yml` | PostgreSQL | DB host |
+| `docker-compose.backend.yml` | FastAPI + Celery + Redis | Backend host |
+| `docker-compose.ollama.yml` | Ollama | GPU host |
+| `docker-compose.frontend.yml` | Vite frontend | Frontend host |
+
+Configure each machine's `.env` with the addresses of the other services:
 
 ```bash
-# Pull the model before first run
-docker exec budget-y-ollama-1 ollama pull qwen3:8b
+# Backend host .env
+DATABASE_URL=postgresql://budgety:pass@<db-host>:5432/budgety
+REDIS_URL=redis://redis:6379/0
+OLLAMA_URL=http://<ollama-host>:11434/api/generate
+
+# Frontend host .env
+VITE_BACKEND_URL=http://<backend-host>:8000
+```
+
+### Migrate from SQLite
+
+```bash
+docker compose exec backend alembic upgrade head
+docker compose exec backend python scripts/sqlite_to_postgres.py
 ```
 
 ## iOS Shortcut
@@ -87,4 +125,9 @@ POST to `https://<your-domain>/api/shortcut/transactions` with header `X-Api-Key
 
 ## CSV format
 
-Export works out of the box — columns: `Date`, `Description`, `Amount`, optional `Card`.
+Auto-detects two formats:
+
+| Format | Header | Columns |
+|---|---|---|
+| ANZ | None | `Date, Amount, Description` |
+| AMEX | Required | `Date, Description, Amount` |
