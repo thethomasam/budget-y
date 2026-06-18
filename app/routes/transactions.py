@@ -10,9 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.config import config, REDIS_URL
 from app.database import get_db
-from app.models import Transaction, User
+from app.models import Transaction
 from app.schemas.transaction import TransactionCreate
-from app.services.auth import get_current_user, get_user_from_api_key_or_token
 from app.services.csv_parser import CSVParser
 from app.tasks.csv_upload import process_csv, categorise_single
 
@@ -22,7 +21,7 @@ QUEUE = config["processing"]
 
 
 @router.post("/upload-csv")
-async def upload_csv(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
 
@@ -48,13 +47,13 @@ async def upload_csv(file: UploadFile = File(...), current_user: User = Depends(
     r.expire(f"job:{job_id}", QUEUE["job_ttl"])
     r.close()
 
-    process_csv.delay(job_id, str(file_path), total, current_user.id)
+    process_csv.delay(job_id, str(file_path), total, None)
 
     return {"job_id": job_id, "total": total, "status": "queued"}
 
 
 @router.get("/upload-csv/{job_id}")
-def get_upload_status(job_id: str, current_user: User = Depends(get_current_user)):
+def get_upload_status(job_id: str):
     r = redis_lib.from_url(REDIS_URL)
     job = r.hgetall(f"job:{job_id}")
     r.close()
@@ -72,16 +71,12 @@ def get_upload_status(job_id: str, current_user: User = Depends(get_current_user
 
 
 @router.get("")
-def get_transactions(skip: int = 0, limit: int = 5000, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(Transaction).filter(Transaction.user_id == current_user.id).order_by(Transaction.date.desc()).offset(skip).limit(limit).all()
+def get_transactions(skip: int = 0, limit: int = 5000, db: Session = Depends(get_db)):
+    return db.query(Transaction).order_by(Transaction.date.desc()).offset(skip).limit(limit).all()
 
 
 @router.post("")
-async def add_transaction(
-    body: TransactionCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_user_from_api_key_or_token),
-):
+async def add_transaction(body: TransactionCreate, db: Session = Depends(get_db)):
     if not body.merchant:
         raise HTTPException(status_code=400, detail="Merchant is required")
     if body.amount is None:
@@ -95,7 +90,6 @@ async def add_transaction(
             category=body.category or None,
             amount=float(body.amount),
             card=body.card,
-            user_id=current_user.id,
         )
         db.add(txn)
         db.commit()
@@ -111,8 +105,8 @@ async def add_transaction(
 
 
 @router.delete("/{transaction_id}")
-def delete_transaction(transaction_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    txn = db.query(Transaction).filter(Transaction.id == transaction_id, Transaction.user_id == current_user.id).first()
+def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
+    txn = db.query(Transaction).filter(Transaction.id == transaction_id).first()
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
     db.delete(txn)
@@ -121,7 +115,7 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db), curre
 
 
 @router.delete("")
-def delete_all_transactions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    db.query(Transaction).filter(Transaction.user_id == current_user.id).delete()
+def delete_all_transactions(db: Session = Depends(get_db)):
+    db.query(Transaction).delete()
     db.commit()
     return {"message": "All transactions deleted"}

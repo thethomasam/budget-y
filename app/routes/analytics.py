@@ -4,9 +4,8 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 
 from app.database import get_db
-from app.models import Transaction, User
+from app.models import Transaction
 from app.config import config
-from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -18,12 +17,11 @@ def _parse_month(month_str: str) -> datetime:
 
 
 @router.get("/category-breakdown")
-def get_category_breakdown(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_category_breakdown(db: Session = Depends(get_db)):
     results = db.query(
         Transaction.category,
         func.sum(func.abs(Transaction.amount)).label('total')
     ).filter(
-        Transaction.user_id == current_user.id,
         Transaction.category.isnot(None),
         Transaction.category != ""
     ).group_by(Transaction.category).all()
@@ -38,13 +36,12 @@ def get_category_breakdown(db: Session = Depends(get_db), current_user: User = D
 
 
 @router.get("/monthly-category-spend")
-def get_monthly_category_spend(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_monthly_category_spend(db: Session = Depends(get_db)):
     results = db.query(
         Transaction.category,
         _month.label('month'),
         func.sum(func.abs(Transaction.amount)).label('total')
     ).filter(
-        Transaction.user_id == current_user.id,
         Transaction.category.isnot(None),
         Transaction.category != ""
     ).group_by(Transaction.category, _month).order_by(_month).all()
@@ -62,22 +59,21 @@ def get_monthly_category_spend(db: Session = Depends(get_db), current_user: User
     return {"months": months_labels, "categories": categories_data}
 
 
-def _query_monthly_totals(db: Session, user_id: int) -> list:
+def _query_monthly_totals(db: Session) -> list:
     twelve_months_ago = datetime.now().date() - timedelta(days=365)
     return db.query(
         _month.label('month'),
         func.sum(Transaction.amount).label('total')
     ).filter(
-        Transaction.user_id == user_id,
         Transaction.date >= twelve_months_ago,
         Transaction.amount > 0
     ).group_by(_month).order_by(_month).all()
 
 
 @router.get("/monthly-savings")
-def get_monthly_savings(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_monthly_savings(db: Session = Depends(get_db)):
     monthly_budget = config["frontend"]["monthly_budget"]
-    results = _query_monthly_totals(db, current_user.id)
+    results = _query_monthly_totals(db)
     return {"monthly_savings": [
         {"month": _parse_month(r.month).strftime('%b'), "year": _parse_month(r.month).year, "amount": monthly_budget - float(r.total)}
         for r in results
@@ -85,8 +81,8 @@ def get_monthly_savings(db: Session = Depends(get_db), current_user: User = Depe
 
 
 @router.get("/monthly-expenses")
-def get_monthly_expenses(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    results = _query_monthly_totals(db, current_user.id)
+def get_monthly_expenses(db: Session = Depends(get_db)):
+    results = _query_monthly_totals(db)
     return {"monthly_expenses": [
         {"month": _parse_month(r.month).strftime('%b'), "year": _parse_month(r.month).year, "amount": float(r.total)}
         for r in results

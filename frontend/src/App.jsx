@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { DataProvider, useData } from './context/DataContext';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import LoginPage from './components/LoginPage';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import KPICards from './components/KPICards';
@@ -24,18 +22,13 @@ function Dashboard() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Row 1: KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <KPICards />
       </div>
-
-      {/* Row 2: Category Breakdown + Budget vs Actual */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
         <CategoryBreakdownCard />
         <BudgetProgressCard />
       </div>
-
-      {/* Row 3: Spending Trend + Savings Trend */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <SpendingTrendCard />
         <SpendingHeatmap />
@@ -44,11 +37,8 @@ function Dashboard() {
   );
 }
 
-function AuthenticatedApp() {
-  const { isAuthenticated } = useAuth();
+function App() {
   const [activeView, setActiveView] = useState('dashboard');
-
-  if (!isAuthenticated) return <LoginPage />;
 
   return (
     <DataProvider>
@@ -63,7 +53,6 @@ function AuthenticatedApp() {
           ) : null}
         </main>
 
-        {/* Mobile bottom navigation */}
         <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-bg-card border-t border-border z-[100] flex justify-around items-center py-3">
           <button
             onClick={() => setActiveView('dashboard')}
@@ -86,14 +75,6 @@ function AuthenticatedApp() {
         </nav>
       </div>
     </DataProvider>
-  );
-}
-
-function App() {
-  return (
-    <AuthProvider>
-      <AuthenticatedApp />
-    </AuthProvider>
   );
 }
 

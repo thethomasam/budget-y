@@ -1,11 +1,9 @@
 import { useState, useRef } from 'react';
 import { HiOutlineTrash, HiOutlineUpload } from 'react-icons/hi';
 import { useData } from '../context/DataContext';
-import { useAuth } from '../context/AuthContext';
 
 const TransactionsView = () => {
   const { transactions, loading, deleteTransaction, refetch } = useData();
-  const { token } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
   const [filterFrom, setFilterFrom] = useState(() => localStorage.getItem('filter_from') || '');
@@ -31,7 +29,7 @@ const TransactionsView = () => {
     setUploading(true);
     setUploadStatus(null);
     try {
-      const res = await fetch('/api/transactions/upload-csv', { method: 'POST', body: formData, headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch('/api/transactions/upload-csv', { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Upload failed');
       const { job_id, total } = await res.json();
       setUploadStatus({ total, rule_categorised: 0, llm_done: 0, llm_queued: 0, failed: 0, status: 'processing' });
@@ -45,7 +43,7 @@ const TransactionsView = () => {
   const pollStatus = (job_id) => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/transactions/upload-csv/${job_id}`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`/api/transactions/upload-csv/${job_id}`, {});
         const data = await res.json();
         setUploadStatus(data);
         if (data.status === 'complete' || data.status === 'failed') {
@@ -75,7 +73,7 @@ const TransactionsView = () => {
   const updateCategory = async (id, category) => {
     await fetch(`/api/categories/transactions/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ category }),
     });
     refetch();
@@ -98,7 +96,7 @@ const TransactionsView = () => {
 
   const handleDeleteAll = async () => {
     if (!confirm('Delete all transactions? This cannot be undone.')) return;
-    await fetch('/api/transactions', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    await fetch('/api/transactions', { method: 'DELETE' });
     refetch();
   };
 
@@ -120,7 +118,7 @@ const TransactionsView = () => {
 
   const bulkDelete = async () => {
     if (!confirm(`Delete ${selected.size} transactions?`)) return;
-    await Promise.all([...selected].map(id => fetch(`/api/transactions/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })));
+    await Promise.all([...selected].map(id => fetch(`/api/transactions/${id}`, { method: 'DELETE' })));
     setSelected(new Set());
     refetch();
   };
@@ -129,7 +127,7 @@ const TransactionsView = () => {
     if (!bulkCategory) return;
     await fetch('/api/categories/transactions/bulk-update', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transaction_ids: [...selected], category: bulkCategory }),
     });
     setSelected(new Set());
