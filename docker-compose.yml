@@ -15,69 +15,22 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  ollama:
-    image: ollama/ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    healthcheck:
-      test: ["CMD", "/bin/sh", "-c", "ollama list | grep -q qwen3:8b"]
-      interval: 15s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
-
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: docker/Dockerfile.backend
     ports:
       - "8000:8000"
     volumes:
       - .:/app
-      - uploads:/tmp/budgety_uploads
     env_file:
       - .env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://budgety:budgety@db:5432/budgety}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434/api/generate}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://budgety:budgety@db:5432/budgety}
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_started
-      ollama:
-        condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  celery_worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    volumes:
-      - .:/app
-      - uploads:/tmp/budgety_uploads
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://budgety:budgety@db:5432/budgety}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434/api/generate}
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      ollama:
-        condition: service_healthy
-    command: celery -A app.celery_app worker --loglevel=info
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
     build:
@@ -96,5 +49,3 @@ services:
 
 volumes:
   pg_data:
-  ollama_data:
-  uploads:

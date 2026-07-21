@@ -1,9 +1,4 @@
 services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-
   backend:
     build:
       context: ..
@@ -12,33 +7,8 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ..:/app
-      - uploads:/tmp/budgety_uploads
     env_file:
       - ../.env
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://budgety:budgety@localhost:5432/budgety}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434/api/generate}
-    depends_on:
-      - redis
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  celery_worker:
-    build:
-      context: ..
-      dockerfile: Dockerfile.backend
-    volumes:
-      - ..:/app
-      - uploads:/tmp/budgety_uploads
-    env_file:
-      - ../.env
-    environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://budgety:budgety@localhost:5432/budgety}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434/api/generate}
-    depends_on:
-      - redis
-    command: celery -A app.celery_app worker --loglevel=info
-
-volumes:
-  uploads:
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload

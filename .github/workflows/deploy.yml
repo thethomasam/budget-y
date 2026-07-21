@@ -25,4 +25,3 @@ jobs:
             cd ~/projects/docker/budget-y
             git pull origin master
             sudo docker compose -f docker/docker-compose.backend.yml --env-file .env up -d --build
-            sudo docker compose -f docker/docker-compose.backend.yml --env-file .env exec -T backend alembic upgrade head
