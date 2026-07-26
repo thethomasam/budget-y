@@ -45,3 +45,6 @@ frontend/build/
 .DS_Store
 Thumbs.db
 ANZ-*.csv
+
+ssh-*
+oc/

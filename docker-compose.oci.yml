@@ -1,8 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
-    ports:
-      - "${DB_PORT:-5432}:5432"
+    image: docker.io/library/postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-budgety}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-budgety}
@@ -14,6 +12,16 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
 
 volumes:
   pg_data:

@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: docker.io/library/postgres:16-alpine
     ports:
       - "5432:5432"
     environment:
@@ -17,12 +17,11 @@ services:
 
   backend:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.backend
+      context: ./local-api
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
+      - ./local-api:/app
     env_file:
       - .env
     environment:
