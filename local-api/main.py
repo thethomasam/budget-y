@@ -1,11 +1,17 @@
+import asyncio
+import os
 from datetime import date as date_type
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy.orm import Session
 
-from database import Base, engine, get_db
+from database import Base, SessionLocal, engine, get_db
 from models import Transaction
+
+REMOTE_LEDGER_URL = os.environ.get("REMOTE_LEDGER_URL", "https://api.samsllama.com").rstrip("/")
+SYNC_INTERVAL_SECONDS = int(os.environ.get("SYNC_INTERVAL_SECONDS", "300"))
 
 # Create tables on startup. For real migrations, use Alembic instead.
 Base.metadata.create_all(bind=engine)
@@ -82,6 +88,45 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
 def delete_all_transactions(db: Session = Depends(get_db)):
     db.query(Transaction).delete()
     db.commit()
+
+
+def sync_from_remote():
+    response = httpx.get(f"{REMOTE_LEDGER_URL}/transaction", timeout=10.0)
+    response.raise_for_status()
+    remote_transactions = response.json()
+    if not remote_transactions:
+        return
+
+    db = SessionLocal()
+    try:
+        for item in remote_transactions:
+            db.add(Transaction(
+                amount=item["amount"],
+                merchant=item["merchant"],
+                card=item["card"],
+                date=date_type.fromisoformat(item["date"]),
+                description=item["description"],
+            ))
+        db.commit()
+    finally:
+        db.close()
+
+    # Clear the remote ledger now that its transactions are stored locally.
+    httpx.delete(f"{REMOTE_LEDGER_URL}/transaction", timeout=10.0).raise_for_status()
+
+
+async def sync_loop():
+    while True:
+        try:
+            sync_from_remote()
+        except Exception as e:
+            print(f"remote sync failed: {e}")
+        await asyncio.sleep(SYNC_INTERVAL_SECONDS)
+
+
+@app.on_event("startup")
+async def start_sync_loop():
+    asyncio.create_task(sync_loop())
 
 
 if __name__ == "__main__":

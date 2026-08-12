@@ -59,7 +59,7 @@ const CategoryMonthlySpendCard = () => {
   return (
     <div className="bg-bg-card rounded-2xl p-3 shadow-sm hover:shadow-md transition-all h-full flex flex-col">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-text-primary">Monthly Spend by Category</h3>
+        <h3 className="text-base font-semibold text-text-primary">Monthly Spend by Merchant</h3>
         <div className="flex gap-1">
           {RANGE_OPTIONS.map(n => (
             <button

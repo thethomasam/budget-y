@@ -26,6 +26,8 @@ services:
       - .env
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://budgety:budgety@db:5432/budgety}
+      - REMOTE_LEDGER_URL=${REMOTE_LEDGER_URL:-https://api.samsllama.com}
+      - SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS:-300}
     depends_on:
       db:
         condition: service_healthy

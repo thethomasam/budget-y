@@ -2,6 +2,9 @@ import { createContext, useContext, useState, useEffect } from 'react';
 
 const DataContext = createContext();
 
+const MONTHLY_BUDGET = 3000;
+const TOP_MERCHANTS = 6;
+
 export const useData = () => {
   const context = useContext(DataContext);
   if (!context) {
@@ -10,13 +13,55 @@ export const useData = () => {
   return context;
 };
 
+const monthKey = (dateStr) => {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const monthLabel = (key) => {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+};
+
+// Derive month-over-month totals purely from the raw transaction list.
+const computeMonthlyExpenses = (transactions) => {
+  const totals = {};
+  transactions.forEach(t => {
+    const key = monthKey(t.date);
+    totals[key] = (totals[key] || 0) + Math.abs(t.amount);
+  });
+  return Object.keys(totals).sort().map(key => ({ month: monthLabel(key), amount: totals[key] }));
+};
+
+// No category field exists anymore, so break spend down by merchant instead.
+const computeMonthlyMerchantSpend = (transactions) => {
+  const monthKeys = [...new Set(transactions.map(t => monthKey(t.date)))].sort();
+
+  const merchantTotals = {};
+  transactions.forEach(t => {
+    merchantTotals[t.merchant] = (merchantTotals[t.merchant] || 0) + Math.abs(t.amount);
+  });
+  const topMerchants = Object.entries(merchantTotals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, TOP_MERCHANTS)
+    .map(([name]) => name);
+
+  const categories = topMerchants.map(name => ({
+    name,
+    monthly: monthKeys.map(key =>
+      transactions
+        .filter(t => t.merchant === name && monthKey(t.date) === key)
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    ),
+  }));
+
+  return { months: monthKeys.map(monthLabel), categories };
+};
+
 export const DataProvider = ({ children }) => {
   const [transactions, setTransactions] = useState([]);
-  const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [monthlyExpenses, setMonthlyExpenses] = useState([]);
-  const [monthlySavings, setMonthlySavings] = useState([]);
   const [monthlyCategorySpend, setMonthlyCategorySpend] = useState({ months: [], categories: [] });
-  const [settings, setSettings] = useState({ user: { name: '' }, budget_goals: [], transaction_limit: 1000, monthly_budget: 3000 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -25,66 +70,13 @@ export const DataProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      const [transactionsRes, categoryRes, monthlyRes] = await Promise.all([
-        fetch('/api/transactions?limit=5000'),
-        fetch('/api/analytics/category-breakdown'),
-        fetch('/api/analytics/monthly-expenses'),
-      ]);
+      const res = await fetch('/api/transaction');
+      if (!res.ok) throw new Error(`Failed to fetch transactions: ${res.status} ${res.statusText}`);
+      const data = await res.json();
 
-      if (!transactionsRes.ok || !categoryRes.ok || !monthlyRes.ok) {
-        const errorDetails = {
-          transactions: !transactionsRes.ok ? `${transactionsRes.status} ${transactionsRes.statusText}` : 'OK',
-          category: !categoryRes.ok ? `${categoryRes.status} ${categoryRes.statusText}` : 'OK',
-          monthly: !monthlyRes.ok ? `${monthlyRes.status} ${monthlyRes.statusText}` : 'OK',
-        };
-        console.error('API Error Details:', errorDetails);
-        throw new Error(`Failed to fetch data from API: ${JSON.stringify(errorDetails)}`);
-      }
-
-      const monthlyCatData = await fetch('/api/analytics/monthly-category-spend')
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null);
-
-      const monthlySavingsData = await fetch('/api/analytics/monthly-savings')
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null);
-
-      const settingsData = await fetch('/api/settings')
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null);
-
-      const transactionsData = await transactionsRes.json();
-      const categoryData = await categoryRes.json();
-      const monthlyData = await monthlyRes.json();
-
-      const colors = ['#5B6FED', '#FF6B9D', '#FFC542', '#00D4AA', '#9B7EFF', '#FF8A65', '#4CAF50', '#FF5722'];
-      const categoryBreakdownWithColors = categoryData.categories.map((cat, index) => ({
-        name: cat.category,
-        value: cat.percentage,
-        amount: cat.amount,
-        color: colors[index % colors.length]
-      }));
-
-      if (settingsData) setSettings(settingsData);
-
-      const goals = settingsData?.budget_goals || [];
-      const goalColors = ['#5B6FED', '#FF6B9D', '#FFC542', '#00D4AA', '#9B7EFF', '#FF8A65', '#4CAF50', '#FF5722', '#26C6DA', '#AB47BC'];
-      const goalMeta = {};
-      goals.forEach((g, i) => {
-        const meta = { color: goalColors[i % goalColors.length], icon: g.icon };
-        [g.name, ...(g.aliases || [])].forEach(alias => { goalMeta[alias] = meta; });
-      });
-      const enriched = transactionsData.map(t => ({
-        ...t,
-        color: goalMeta[t.category]?.color || '#5B6FED',
-        icon: goalMeta[t.category]?.icon || '💳',
-      }));
-
-      setTransactions(enriched);
-      setCategoryBreakdown(categoryBreakdownWithColors);
-      setMonthlyExpenses(monthlyData.monthly_expenses || []);
-      if (monthlyCatData) setMonthlyCategorySpend(monthlyCatData);
-      if (monthlySavingsData) setMonthlySavings(monthlySavingsData.monthly_savings || []);
+      setTransactions(data);
+      setMonthlyExpenses(computeMonthlyExpenses(data));
+      setMonthlyCategorySpend(computeMonthlyMerchantSpend(data));
       setLoading(false);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -97,8 +89,23 @@ export const DataProvider = ({ children }) => {
     fetchData();
   };
 
+  const addTransaction = async ({ amount, merchant, card }) => {
+    const res = await fetch('/api/transaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount, merchant, card }),
+    });
+    if (!res.ok) throw new Error('Failed to add transaction');
+    await fetchData();
+  };
+
   const deleteTransaction = async (id) => {
-    await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+    await fetch(`/api/transaction/${id}`, { method: 'DELETE' });
+    fetchData();
+  };
+
+  const deleteAllTransactions = async () => {
+    await fetch('/api/transaction', { method: 'DELETE' });
     fetchData();
   };
 
@@ -126,55 +133,20 @@ export const DataProvider = ({ children }) => {
       .slice(0, limit);
   };
 
-  const getFortnightDates = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const day = now.getDate();
-    if (day <= 14) {
-      return { start: new Date(year, month, 1), end: new Date(year, month, 14, 23, 59, 59) };
-    } else {
-      return { start: new Date(year, month, 15), end: new Date(year, month + 1, 0, 23, 59, 59) };
-    }
-  };
-
-  const getBudgetProgress = () => {
-    const { start, end } = getFortnightDates();
-    return settings.budget_goals.map(goal => {
-      const names = new Set([goal.name, ...(goal.aliases || [])]);
-      const fortnightBudget = goal.budget / 2;
-      const spent = transactions
-        .filter(t => {
-          const date = new Date(t.date);
-          return names.has(t.category) && date >= start && date <= end;
-        })
-        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-      const percentage = fortnightBudget > 0 ? (spent / fortnightBudget) * 100 : 0;
-      return {
-        name: goal.name,
-        icon: goal.icon,
-        budget: fortnightBudget,
-        amount: spent,
-        percentage,
-      };
-    });
-  };
-
   const value = {
     transactions,
-    categoryBreakdown,
     monthlyExpenses,
-    monthlySavings,
     monthlyCategorySpend,
-    settings,
+    monthlyBudget: MONTHLY_BUDGET,
     loading,
     error,
     refetch,
+    addTransaction,
     deleteTransaction,
+    deleteAllTransactions,
     totalExpense: getTotalExpense(),
     currentMonthExpense: getCurrentMonthExpense(),
     recentTransactions: getRecentTransactions(),
-    budgetProgress: getBudgetProgress(),
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

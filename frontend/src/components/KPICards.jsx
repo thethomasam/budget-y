@@ -59,9 +59,8 @@ const KPICard = ({ title, value, change, changeType, sparklineData, icon, color 
 };
 
 const KPICards = () => {
-  const { transactions, currentMonthExpense, monthlyExpenses, settings } = useData();
+  const { currentMonthExpense, monthlyExpenses, monthlyBudget } = useData();
 
-  const monthlyBudget = settings.monthly_budget || 3000;
   const remaining = monthlyBudget - currentMonthExpense;
   const budgetUsedPct = monthlyBudget > 0 ? ((currentMonthExpense / monthlyBudget) * 100).toFixed(1) : 0;
 

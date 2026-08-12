@@ -43,31 +43,21 @@ const getStatusColor = (percentage, pace) => {
 };
 
 const BudgetProgressCard = () => {
-  const { transactions, settings } = useData();
+  const { transactions, monthlyBudget } = useData();
   const [offset, setOffset] = useState(0);
 
   const { start, end } = getFortnightRange(offset);
   const pace = getPacePercent(start, end);
   const isCurrentPeriod = offset === 0;
 
-  const categories = (settings.budget_goals || []).map(goal => {
-    const names = new Set([goal.name, ...(goal.aliases || [])]);
-    const fortnightBudget = goal.budget / 2;
-    const spent = transactions
-      .filter(t => {
-        const date = new Date(t.date);
-        return names.has(t.category) && date >= start && date <= end;
-      })
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-    const percentage = fortnightBudget > 0 ? (spent / fortnightBudget) * 100 : 0;
-    return { name: goal.name, icon: goal.icon, budget: fortnightBudget, amount: spent, percentage };
-  });
-
-  if (!categories?.length) return (
-    <div className="bg-bg-card rounded-2xl p-3 shadow-sm h-full flex items-center justify-center">
-      <div className="text-text-secondary text-sm">No budget data yet</div>
-    </div>
-  );
+  const fortnightBudget = monthlyBudget / 2;
+  const spent = transactions
+    .filter(t => {
+      const date = new Date(t.date);
+      return date >= start && date <= end;
+    })
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const percentage = fortnightBudget > 0 ? (spent / fortnightBudget) * 100 : 0;
 
   return (
     <div className="bg-bg-card rounded-2xl p-3 shadow-sm hover:shadow-md transition-all h-full flex flex-col">
@@ -102,50 +92,44 @@ const BudgetProgressCard = () => {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-2.5">
-          {categories.map((category, index) => (
-            <div key={index}>
-              <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">{category.icon}</span>
-                  <span className="text-xs font-medium text-text-primary">{category.name}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs font-semibold text-text-primary">
-                    ${category.amount.toFixed(0)}
-                  </span>
-                  <span className="text-[10px] text-text-secondary ml-0.5">
-                    / ${category.budget.toFixed(0)}
-                  </span>
-                </div>
-              </div>
-              <div className="w-full h-2 bg-border rounded overflow-hidden relative">
-                <div
-                  className="h-full rounded transition-all duration-500 ease-out"
-                  style={{
-                    width: `${Math.min(category.percentage, 100)}%`,
-                    backgroundColor: getStatusColor(category.percentage, isCurrentPeriod ? pace : 100),
-                  }}
-                />
-                {/* Pace marker — where you should be today */}
-                {isCurrentPeriod && pace > 0 && pace < 100 && (
-                  <div
-                    className="absolute top-0 h-full w-0.5 bg-white opacity-80"
-                    style={{ left: `${pace}%` }}
-                  />
-                )}
-              </div>
-              <div className="text-[10px] text-text-secondary mt-0.5">
-                {category.percentage.toFixed(0)}% used
-                {isCurrentPeriod && category.percentage > pace + 5 && (
-                  <span className="ml-1 text-orange-400 font-medium">
-                    · ${((category.percentage - pace) / 100 * category.budget).toFixed(0)} ahead of pace
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+      <div className="flex-1 flex flex-col justify-center gap-2.5">
+        <div className="flex justify-between items-center mb-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm">💰</span>
+            <span className="text-xs font-medium text-text-primary">Overall spend</span>
+          </div>
+          <div className="text-right">
+            <span className="text-xs font-semibold text-text-primary">
+              ${spent.toFixed(0)}
+            </span>
+            <span className="text-[10px] text-text-secondary ml-0.5">
+              / ${fortnightBudget.toFixed(0)}
+            </span>
+          </div>
+        </div>
+        <div className="w-full h-2 bg-border rounded overflow-hidden relative">
+          <div
+            className="h-full rounded transition-all duration-500 ease-out"
+            style={{
+              width: `${Math.min(percentage, 100)}%`,
+              backgroundColor: getStatusColor(percentage, isCurrentPeriod ? pace : 100),
+            }}
+          />
+          {/* Pace marker — where you should be today */}
+          {isCurrentPeriod && pace > 0 && pace < 100 && (
+            <div
+              className="absolute top-0 h-full w-0.5 bg-white opacity-80"
+              style={{ left: `${pace}%` }}
+            />
+          )}
+        </div>
+        <div className="text-[10px] text-text-secondary mt-0.5">
+          {percentage.toFixed(0)}% used
+          {isCurrentPeriod && percentage > pace + 5 && (
+            <span className="ml-1 text-orange-400 font-medium">
+              · ${((percentage - pace) / 100 * fortnightBudget).toFixed(0)} ahead of pace
+            </span>
+          )}
         </div>
       </div>
     </div>
