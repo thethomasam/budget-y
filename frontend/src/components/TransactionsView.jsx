@@ -89,7 +89,7 @@ const AddTransactionForm = ({ onClose }) => {
 };
 
 const TransactionsView = () => {
-  const { transactions, loading, deleteTransaction, deleteAllTransactions } = useData();
+  const { transactions, loading, deleteTransaction, deleteAllTransactions, categories, updateTransactionCategory } = useData();
   const [showAddForm, setShowAddForm] = useState(false);
   const [filterFrom, setFilterFrom] = useState(() => localStorage.getItem('filter_from') || '');
   const [filterTo, setFilterTo] = useState(() => localStorage.getItem('filter_to') || '');
@@ -295,6 +295,17 @@ const TransactionsView = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                      <select
+                        value={transaction.category || ''}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => updateTransactionCategory(transaction.id, e.target.value)}
+                        className="bg-bg-primary border border-border rounded-lg px-2 py-1 text-xs text-text-secondary focus:outline-none focus:border-primary-blue"
+                      >
+                        {!transaction.category && <option value="" disabled>Uncategorized</option>}
+                        {categories.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
                       <div className="text-base font-semibold text-primary-blue">
                         ${Math.abs(transaction.amount).toFixed(2)}
                       </div>

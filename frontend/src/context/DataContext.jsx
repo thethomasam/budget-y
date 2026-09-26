@@ -33,24 +33,24 @@ const computeMonthlyExpenses = (transactions) => {
   return Object.keys(totals).sort().map(key => ({ month: monthLabel(key), amount: totals[key] }));
 };
 
-// No category field exists anymore, so break spend down by merchant instead.
 const computeMonthlyMerchantSpend = (transactions) => {
   const monthKeys = [...new Set(transactions.map(t => monthKey(t.date)))].sort();
+  const categoryOf = (t) => t.category || t.merchant;
 
-  const merchantTotals = {};
+  const categoryTotals = {};
   transactions.forEach(t => {
-    merchantTotals[t.merchant] = (merchantTotals[t.merchant] || 0) + Math.abs(t.amount);
+    categoryTotals[categoryOf(t)] = (categoryTotals[categoryOf(t)] || 0) + Math.abs(t.amount);
   });
-  const topMerchants = Object.entries(merchantTotals)
+  const topCategories = Object.entries(categoryTotals)
     .sort((a, b) => b[1] - a[1])
     .slice(0, TOP_MERCHANTS)
     .map(([name]) => name);
 
-  const categories = topMerchants.map(name => ({
+  const categories = topCategories.map(name => ({
     name,
     monthly: monthKeys.map(key =>
       transactions
-        .filter(t => t.merchant === name && monthKey(t.date) === key)
+        .filter(t => categoryOf(t) === name && monthKey(t.date) === key)
         .reduce((sum, t) => sum + Math.abs(t.amount), 0)
     ),
   }));
@@ -61,7 +61,8 @@ const computeMonthlyMerchantSpend = (transactions) => {
 export const DataProvider = ({ children }) => {
   const [transactions, setTransactions] = useState([]);
   const [monthlyExpenses, setMonthlyExpenses] = useState([]);
-  const [monthlyCategorySpend, setMonthlyCategorySpend] = useState({ months: [], categories: [] });
+  const [monthlyMerchantSpend, setMonthlyMerchantSpend] = useState({ months: [], categories: [] });
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -76,17 +77,13 @@ export const DataProvider = ({ children }) => {
 
       setTransactions(data);
       setMonthlyExpenses(computeMonthlyExpenses(data));
-      setMonthlyCategorySpend(computeMonthlyMerchantSpend(data));
+      setMonthlyMerchantSpend(computeMonthlyMerchantSpend(data));
       setLoading(false);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message);
       setLoading(false);
     }
-  };
-
-  const refetch = () => {
-    fetchData();
   };
 
   const addTransaction = async ({ amount, merchant, card }) => {
@@ -109,44 +106,59 @@ export const DataProvider = ({ children }) => {
     fetchData();
   };
 
+  const updateTransactionCategory = async (id, category) => {
+    const res = await fetch(`/api/transaction/${id}/category`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category }),
+    });
+    if (!res.ok) throw new Error('Failed to update category');
+    await fetchData();
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch('/api/categories');
+      if (!res.ok) return;
+      setCategories(await res.json());
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchCategories();
   }, []);
 
-  const getTotalExpense = () => {
-    return transactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  };
-
-  const getCurrentMonthExpense = () => {
-    const now = new Date();
-    return transactions
-      .filter(t => {
-        const d = new Date(t.date);
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      })
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  };
-
-  const getRecentTransactions = (limit = 5) => {
-    return [...transactions]
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, limit);
-  };
+  const now = new Date();
+  const totalExpense = transactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const currentMonthExpense = transactions
+    .filter(t => {
+      const d = new Date(t.date);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    })
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const recentTransactions = [...transactions]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 5);
 
   const value = {
     transactions,
     monthlyExpenses,
-    monthlyCategorySpend,
+    monthlyMerchantSpend,
     monthlyBudget: MONTHLY_BUDGET,
+    categories,
     loading,
     error,
-    refetch,
+    refetch: fetchData,
     addTransaction,
     deleteTransaction,
     deleteAllTransactions,
-    totalExpense: getTotalExpense(),
-    currentMonthExpense: getCurrentMonthExpense(),
-    recentTransactions: getRecentTransactions(),
+    updateTransactionCategory,
+    totalExpense,
+    currentMonthExpense,
+    recentTransactions,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
