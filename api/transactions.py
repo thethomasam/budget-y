@@ -1,9 +1,12 @@
+import re
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy.orm import Session
 
+from categorizer import categorize_merchant
+from csv_parsers import CsvParseError, parse_csv, parse_date
 from database import get_db
 from models import Category, Transaction
 
@@ -86,11 +89,51 @@ def add_transaction(payload: TransactionIn, db: Session = Depends(get_db)):
         **payload.model_dump(),
         date=today,
         description=f"{payload.merchant} on {today.isoformat()}",
+        category=categorize_merchant(payload.merchant, db),
     )
     db.add(transaction)
     db.commit()
     db.refresh(transaction)
     return transaction
+
+
+@router.post("/transaction/csv", response_model=list[TransactionOut], status_code=201)
+def ingest_transactions_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    # Plain `def`, not `async def`: categorize_merchant makes blocking network calls
+    # (web search + Ollama) per row, which would otherwise block the whole event
+    # loop -- FastAPI runs sync `def` routes in a thread pool instead.
+    content = file.file.read().decode("utf-8-sig")
+    try:
+        rows = parse_csv(content)
+    except CsvParseError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    created = []
+    for row in rows:
+        try:
+            amount = _coerce_amount(row["amount"])
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        merchant = re.sub(r"\s+", " ", row["merchant"]).strip()
+        try:
+            row_date = parse_date(row["date"]) if row.get("date") else date_type.today()
+        except CsvParseError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        transaction = Transaction(
+            amount=amount,
+            merchant=merchant,
+            card=row.get("card", ""),
+            date=row_date,
+            description=row.get("description") or f"{merchant} on {row_date.isoformat()}",
+            category=categorize_merchant(merchant, db),
+        )
+        db.add(transaction)
+        created.append(transaction)
+
+    db.commit()
+    for transaction in created:
+        db.refresh(transaction)
+    return created
 
 
 @router.get("/transaction/{transaction_id}", response_model=TransactionOut)
