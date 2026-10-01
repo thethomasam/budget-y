@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from categorizer import categorize_merchant
 from csv_parsers import CsvParseError, parse_csv, parse_date
-from database import get_db
+from database import SessionLocal, get_db
+from ingest_queue import enqueue, get_job, set_progress
 from models import Category, Transaction
 
 router = APIRouter(tags=["transactions"])
@@ -108,68 +109,89 @@ class IngestResult(BaseModel):
     duplicates: list[DuplicateTransaction]
 
 
+class IngestJobOut(BaseModel):
+    job_id: str
+    status: str
+
+
 def _signature(amount: float, merchant: str, row_date: date_type) -> tuple:
     # Round amount to the cent -- float equality on parsed CSV values is
     # otherwise brittle, and bank exports don't carry sub-cent precision.
     return (round(amount, 2), merchant.lower(), row_date)
 
 
-@router.post("/transaction/csv", response_model=IngestResult, status_code=201)
-def ingest_transactions_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    # Plain `def`, not `async def`: categorize_merchant makes blocking network calls
-    # (web search + Ollama) per row, which would otherwise block the whole event
-    # loop -- FastAPI runs sync `def` routes in a thread pool instead.
+def _ingest_rows(job_id: str, rows: list[dict]) -> IngestResult:
+    db = SessionLocal()
+    try:
+        existing = {
+            _signature(amount, merchant, row_date)
+            for amount, merchant, row_date in db.query(
+                Transaction.amount, Transaction.merchant, Transaction.date
+            ).all()
+        }
+
+        created = []
+        duplicates = []
+        for i, row in enumerate(rows):
+            try:
+                amount = _coerce_amount(row["amount"])
+                merchant = re.sub(r"\s+", " ", row["merchant"]).strip()
+                row_date = parse_date(row["date"]) if row.get("date") else date_type.today()
+
+                # Duplicate of a transaction already in the DB, or of an
+                # earlier row in this same CSV (e.g. the file was uploaded
+                # twice).
+                signature = _signature(amount, merchant, row_date)
+                if signature in existing:
+                    duplicates.append(
+                        DuplicateTransaction(amount=amount, merchant=merchant, date=row_date)
+                    )
+                    continue
+                existing.add(signature)
+
+                transaction = Transaction(
+                    amount=amount,
+                    merchant=merchant,
+                    card=row.get("card", ""),
+                    date=row_date,
+                    description=row.get("description") or f"{merchant} on {row_date.isoformat()}",
+                    category=categorize_merchant(merchant, db),
+                )
+                db.add(transaction)
+                created.append(transaction)
+            finally:
+                set_progress(job_id, i + 1)
+
+        db.commit()
+        for transaction in created:
+            db.refresh(transaction)
+        return IngestResult(created=created, duplicates=duplicates)
+    finally:
+        db.close()
+
+
+@router.post("/transaction/csv", response_model=IngestJobOut, status_code=202)
+def ingest_transactions_csv(file: UploadFile = File(...)):
     content = file.file.read().decode("utf-8-sig")
     try:
         rows = parse_csv(content)
-    except CsvParseError as exc:
+        for row in rows:
+            _coerce_amount(row["amount"])
+            if row.get("date"):
+                parse_date(row["date"])
+    except (CsvParseError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
-    existing = {
-        _signature(amount, merchant, row_date)
-        for amount, merchant, row_date in db.query(
-            Transaction.amount, Transaction.merchant, Transaction.date
-        ).all()
-    }
+    job_id = enqueue(lambda job_id: _ingest_rows(job_id, rows), total=len(rows))
+    return IngestJobOut(job_id=job_id, status="pending")
 
-    created = []
-    duplicates = []
-    for row in rows:
-        try:
-            amount = _coerce_amount(row["amount"])
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
-        merchant = re.sub(r"\s+", " ", row["merchant"]).strip()
-        try:
-            row_date = parse_date(row["date"]) if row.get("date") else date_type.today()
-        except CsvParseError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
 
-        # Duplicate of a transaction already in the DB, or of an earlier row
-        # in this same CSV (e.g. the file was uploaded twice).
-        signature = _signature(amount, merchant, row_date)
-        if signature in existing:
-            duplicates.append(
-                DuplicateTransaction(amount=amount, merchant=merchant, date=row_date)
-            )
-            continue
-        existing.add(signature)
-
-        transaction = Transaction(
-            amount=amount,
-            merchant=merchant,
-            card=row.get("card", ""),
-            date=row_date,
-            description=row.get("description") or f"{merchant} on {row_date.isoformat()}",
-            category=categorize_merchant(merchant, db),
-        )
-        db.add(transaction)
-        created.append(transaction)
-
-    db.commit()
-    for transaction in created:
-        db.refresh(transaction)
-    return IngestResult(created=created, duplicates=duplicates)
+@router.get("/transaction/csv/{job_id}", response_model=None)
+def get_ingest_job(job_id: str):
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 @router.get("/transaction/{transaction_id}", response_model=TransactionOut)
