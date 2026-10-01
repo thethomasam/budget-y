@@ -9,19 +9,19 @@ const CsvUploadButton = () => {
   const { ingestTransactionsCsv } = useData();
   const fileInput = useRef(null);
   const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState(null);
 
   const handleFile = async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
     setUploading(true);
-    setResult(null);
     try {
-      const { created, duplicates } = await ingestTransactionsCsv(file);
-      setResult({ ok: true, created: created.length, duplicates: duplicates.length });
-    } catch (err) {
-      setResult({ ok: false, message: err.message });
+      // Progress and the final result/error are shown via the global toast
+      // (see DataContext.ingestTransactionsCsv), so they stay visible even
+      // if the user switches tabs mid-upload.
+      await ingestTransactionsCsv(file);
+    } catch {
+      // Already surfaced via toast.
     } finally {
       setUploading(false);
     }
@@ -37,13 +37,6 @@ const CsvUploadButton = () => {
         {uploading ? 'Uploading...' : 'Upload CSV'}
       </button>
       <input ref={fileInput} type="file" accept=".csv" onChange={handleFile} hidden />
-      {result && (
-        <span className={`text-xs ${result.ok ? 'text-text-secondary' : 'text-danger'}`}>
-          {result.ok
-            ? `Added ${result.created}${result.duplicates ? `, skipped ${result.duplicates} duplicate${result.duplicates === 1 ? '' : 's'}` : ''}`
-            : result.message}
-        </span>
-      )}
     </div>
   );
 };

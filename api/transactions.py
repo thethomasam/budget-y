@@ -107,6 +107,14 @@ class DuplicateTransaction(BaseModel):
 class IngestResult(BaseModel):
     created: list[TransactionOut]
     duplicates: list[DuplicateTransaction]
+    excluded: int = 0
+
+
+def _is_card_payment(merchant: str) -> bool:
+    # Card issuers post the bill payment itself as a transaction line like
+    # "THANK YOU FOR YOUR PAYMENT" -- that's paying off the card, not a
+    # purchase, so it should never be ingested as spend.
+    return "thank you" in merchant.lower()
 
 
 class IngestJobOut(BaseModel):
@@ -132,11 +140,16 @@ def _ingest_rows(job_id: str, rows: list[dict]) -> IngestResult:
 
         created = []
         duplicates = []
+        excluded = 0
         for i, row in enumerate(rows):
             try:
                 amount = _coerce_amount(row["amount"])
                 merchant = re.sub(r"\s+", " ", row["merchant"]).strip()
                 row_date = parse_date(row["date"]) if row.get("date") else date_type.today()
+
+                if _is_card_payment(merchant):
+                    excluded += 1
+                    continue
 
                 # Duplicate of a transaction already in the DB, or of an
                 # earlier row in this same CSV (e.g. the file was uploaded
@@ -165,7 +178,7 @@ def _ingest_rows(job_id: str, rows: list[dict]) -> IngestResult:
         db.commit()
         for transaction in created:
             db.refresh(transaction)
-        return IngestResult(created=created, duplicates=duplicates)
+        return IngestResult(created=created, duplicates=duplicates, excluded=excluded)
     finally:
         db.close()
 

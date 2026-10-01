@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { Toaster } from 'react-hot-toast';
 import { DataProvider, useData, monthLabelFor } from './DataContext';
 import CategoryBudgetCard from './CategoryBudgetCard';
 import DailySpendCard from './DailySpendCard';
 import MonthlyTrendCard from './MonthlyTrendCard';
 import CategoryTrendCard from './CategoryTrendCard';
 import TransactionsView from './TransactionsView';
+import CategoryLimitsView from './CategoryLimitsView';
 
 function SummaryHeader() {
   const { monthTotal, monthLabel, error, selectedMonth, setSelectedMonth, availableMonths } = useData();
@@ -50,6 +52,7 @@ function Dashboard() {
 const TABS = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'transactions', label: 'Transactions' },
+  { key: 'limits', label: 'Category Limits' },
 ];
 
 function Nav({ activeView, onChange }) {
@@ -80,8 +83,15 @@ function App() {
   return (
     <DataProvider>
       <div className="min-h-screen bg-bg-primary">
+        <Toaster position="bottom-right" />
         <Nav activeView={activeView} onChange={setActiveView} />
-        {activeView === 'dashboard' ? <Dashboard /> : <TransactionsView />}
+        {activeView === 'dashboard' ? (
+          <Dashboard />
+        ) : activeView === 'transactions' ? (
+          <TransactionsView />
+        ) : (
+          <CategoryLimitsView />
+        )}
       </div>
     </DataProvider>
   );

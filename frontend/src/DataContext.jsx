@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
 import * as api from './api';
 import { UNCATEGORIZED_LABEL } from './chartPalette';
 
@@ -53,6 +54,21 @@ export const DataProvider = ({ children }) => {
     await fetchData();
   };
 
+  const addCategory = async (name, budget) => {
+    await api.addCategory(name, budget);
+    await fetchData();
+  };
+
+  const renameCategory = async (name, newName) => {
+    await api.updateCategory(name, { name: newName });
+    await fetchData();
+  };
+
+  const deleteCategory = async (name) => {
+    await api.deleteCategory(name);
+    await fetchData();
+  };
+
   const updateTransactionCategory = async (id, category) => {
     await api.updateTransactionCategory(id, category);
     await fetchData();
@@ -63,10 +79,26 @@ export const DataProvider = ({ children }) => {
     await fetchData();
   };
 
+  // Toasts are rendered by a single <Toaster /> at the app root, so progress
+  // keeps showing even if the user navigates away from the Transactions tab
+  // mid-upload -- the toast doesn't live inside the tab's component tree.
   const ingestTransactionsCsv = async (file) => {
-    const result = await api.ingestTransactionsCsv(file);
-    await fetchData();
-    return result;
+    const toastId = toast.loading('Uploading CSV...');
+    try {
+      const result = await api.ingestTransactionsCsv(file, (processed, total) => {
+        toast.loading(total > 0 ? `Processing ${processed}/${total}...` : 'Starting...', { id: toastId });
+      });
+      await fetchData();
+      const { created, duplicates } = result;
+      toast.success(
+        `Added ${created.length}${duplicates.length ? `, skipped ${duplicates.length} duplicate${duplicates.length === 1 ? '' : 's'}` : ''}`,
+        { id: toastId },
+      );
+      return result;
+    } catch (err) {
+      toast.error(err.message, { id: toastId });
+      throw err;
+    }
   };
 
   // Every month that has at least one transaction, newest first, plus the
@@ -159,6 +191,9 @@ export const DataProvider = ({ children }) => {
     error,
     refetch: fetchData,
     updateCategoryBudget,
+    addCategory,
+    renameCategory,
+    deleteCategory,
     updateTransactionCategory,
     deleteTransaction,
     ingestTransactionsCsv,
