@@ -97,7 +97,24 @@ def add_transaction(payload: TransactionIn, db: Session = Depends(get_db)):
     return transaction
 
 
-@router.post("/transaction/csv", response_model=list[TransactionOut], status_code=201)
+class DuplicateTransaction(BaseModel):
+    amount: float
+    merchant: str
+    date: date_type
+
+
+class IngestResult(BaseModel):
+    created: list[TransactionOut]
+    duplicates: list[DuplicateTransaction]
+
+
+def _signature(amount: float, merchant: str, row_date: date_type) -> tuple:
+    # Round amount to the cent -- float equality on parsed CSV values is
+    # otherwise brittle, and bank exports don't carry sub-cent precision.
+    return (round(amount, 2), merchant.lower(), row_date)
+
+
+@router.post("/transaction/csv", response_model=IngestResult, status_code=201)
 def ingest_transactions_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
     # Plain `def`, not `async def`: categorize_merchant makes blocking network calls
     # (web search + Ollama) per row, which would otherwise block the whole event
@@ -108,7 +125,15 @@ def ingest_transactions_csv(file: UploadFile = File(...), db: Session = Depends(
     except CsvParseError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+    existing = {
+        _signature(amount, merchant, row_date)
+        for amount, merchant, row_date in db.query(
+            Transaction.amount, Transaction.merchant, Transaction.date
+        ).all()
+    }
+
     created = []
+    duplicates = []
     for row in rows:
         try:
             amount = _coerce_amount(row["amount"])
@@ -119,6 +144,17 @@ def ingest_transactions_csv(file: UploadFile = File(...), db: Session = Depends(
             row_date = parse_date(row["date"]) if row.get("date") else date_type.today()
         except CsvParseError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
+
+        # Duplicate of a transaction already in the DB, or of an earlier row
+        # in this same CSV (e.g. the file was uploaded twice).
+        signature = _signature(amount, merchant, row_date)
+        if signature in existing:
+            duplicates.append(
+                DuplicateTransaction(amount=amount, merchant=merchant, date=row_date)
+            )
+            continue
+        existing.add(signature)
+
         transaction = Transaction(
             amount=amount,
             merchant=merchant,
@@ -133,7 +169,7 @@ def ingest_transactions_csv(file: UploadFile = File(...), db: Session = Depends(
     db.commit()
     for transaction in created:
         db.refresh(transaction)
-    return created
+    return IngestResult(created=created, duplicates=duplicates)
 
 
 @router.get("/transaction/{transaction_id}", response_model=TransactionOut)

@@ -11,6 +11,7 @@ class Category(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    budget: Mapped[float] = mapped_column(Float, nullable=False, default=0)
 
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="category")
 
