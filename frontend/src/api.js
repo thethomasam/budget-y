@@ -38,8 +38,28 @@ export const updateTransactionCategory = (id, category) =>
     body: JSON.stringify({ category }),
   });
 
-export const deleteTransaction = (id) =>
+export const addTransaction = (fields) =>
+  request('/transaction', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  });
+
+export const listRecurring = () => request('/recurring');
+
+export const addRecurring = (fields) =>
+  request('/recurring', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  });
+
+export const deleteRecurring = (id) => request(`/recurring/${id}`, { method: 'DELETE' });
+
+export const deleteTransaction =(id) =>
   request(`/transaction/${id}`, { method: 'DELETE' });
+
+export const findSimilarTransactions = (id) => request(`/transaction/${id}/similar`);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

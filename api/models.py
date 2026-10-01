@@ -30,3 +30,16 @@ class Transaction(Base):
     )
 
     category: Mapped["Category | None"] = relationship(back_populates="transactions")
+
+
+class RecurringItem(Base):
+    """A regular income or expense that never appears in the card CSVs
+    (salary, rent, ...), used to work out savings."""
+
+    __tablename__ = "recurring_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    frequency: Mapped[str] = mapped_column(String, nullable=False)  # weekly | fortnightly | monthly
+    kind: Mapped[str] = mapped_column(String, nullable=False)  # income | expense

@@ -1,3 +1,4 @@
+import difflib
 import re
 from datetime import date as date_type
 
@@ -9,9 +10,11 @@ from categorizer import categorize_merchant
 from csv_parsers import CsvParseError, parse_csv, parse_date
 from database import SessionLocal, get_db
 from ingest_queue import enqueue, get_job, set_progress
+from location_trie import MerchantCleaner
 from models import Category, Transaction
 
 router = APIRouter(tags=["transactions"])
+_cleaner = MerchantCleaner.default()
 
 
 def _coerce_amount(value):
@@ -38,7 +41,9 @@ def _resolve_category(name: str | None, db: Session) -> Category | None:
 class TransactionIn(BaseModel):
     amount: float
     merchant: str
-    card: str  # last 4 digits only — never store a full card number
+    card: str = ""  # last 4 digits only — never store a full card number
+    date: date_type | None = None  # defaults to today
+    category: str | None = None  # defaults to auto-categorization
 
     @field_validator("amount", mode="before")
     @classmethod
@@ -85,12 +90,22 @@ def list_transactions(db: Session = Depends(get_db)):
 
 @router.post("/transaction", response_model=TransactionOut, status_code=201)
 def add_transaction(payload: TransactionIn, db: Session = Depends(get_db)):
-    today = date_type.today()
+    merchant = re.sub(r"\s+", " ", payload.merchant).strip()
+    if not merchant:
+        raise HTTPException(status_code=422, detail="merchant must not be empty")
+    row_date = payload.date or date_type.today()
+    category = (
+        _resolve_category(payload.category, db)
+        if payload.category
+        else categorize_merchant(merchant, db)
+    )
     transaction = Transaction(
-        **payload.model_dump(),
-        date=today,
-        description=f"{payload.merchant} on {today.isoformat()}",
-        category=categorize_merchant(payload.merchant, db),
+        amount=payload.amount,
+        merchant=merchant,
+        card=payload.card,
+        date=row_date,
+        description=f"{merchant} on {row_date.isoformat()}",
+        category=category,
     )
     db.add(transaction)
     db.commit()
@@ -107,14 +122,6 @@ class DuplicateTransaction(BaseModel):
 class IngestResult(BaseModel):
     created: list[TransactionOut]
     duplicates: list[DuplicateTransaction]
-    excluded: int = 0
-
-
-def _is_card_payment(merchant: str) -> bool:
-    # Card issuers post the bill payment itself as a transaction line like
-    # "THANK YOU FOR YOUR PAYMENT" -- that's paying off the card, not a
-    # purchase, so it should never be ingested as spend.
-    return "thank you" in merchant.lower()
 
 
 class IngestJobOut(BaseModel):
@@ -140,16 +147,11 @@ def _ingest_rows(job_id: str, rows: list[dict]) -> IngestResult:
 
         created = []
         duplicates = []
-        excluded = 0
         for i, row in enumerate(rows):
             try:
                 amount = _coerce_amount(row["amount"])
                 merchant = re.sub(r"\s+", " ", row["merchant"]).strip()
                 row_date = parse_date(row["date"]) if row.get("date") else date_type.today()
-
-                if _is_card_payment(merchant):
-                    excluded += 1
-                    continue
 
                 # Duplicate of a transaction already in the DB, or of an
                 # earlier row in this same CSV (e.g. the file was uploaded
@@ -178,7 +180,7 @@ def _ingest_rows(job_id: str, rows: list[dict]) -> IngestResult:
         db.commit()
         for transaction in created:
             db.refresh(transaction)
-        return IngestResult(created=created, duplicates=duplicates, excluded=excluded)
+        return IngestResult(created=created, duplicates=duplicates)
     finally:
         db.close()
 
@@ -213,6 +215,34 @@ def get_transaction(transaction_id: int, db: Session = Depends(get_db)):
     if transaction is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return transaction
+
+
+def _clean_for_match(merchant: str) -> str:
+    """Business name with the trailing location AND any numeric tokens (store
+    numbers, terminal IDs) stripped, so "COLES 0471 PROSPECT" and
+    "COLES 4948 GREENACRES" both normalize to "coles" instead of comparing
+    as different store numbers."""
+    business_name, _ = _cleaner.clean(merchant)
+    tokens = [t for t in business_name.split() if not t.isdigit()]
+    return " ".join(tokens).lower()
+
+
+@router.get("/transaction/{transaction_id}/similar", response_model=list[TransactionOut])
+def find_similar_transactions(transaction_id: int, db: Session = Depends(get_db)):
+    """Other transactions whose merchant name fuzzy-matches this one"""
+    transaction = db.get(Transaction, transaction_id)
+    if transaction is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    target_key = _clean_for_match(transaction.merchant)
+
+    others = db.query(Transaction).filter(Transaction.id != transaction_id).all()
+    by_cleaned_name: dict[str, list[Transaction]] = {}
+    for t in others:
+        by_cleaned_name.setdefault(_clean_for_match(t.merchant), []).append(t)
+        
+    matching_names = difflib.get_close_matches(target_key, by_cleaned_name.keys(), n=15, cutoff=0.6)
+    return [t for name in matching_names for t in by_cleaned_name[name]]
 
 
 @router.patch("/transaction/{transaction_id}", response_model=TransactionOut)

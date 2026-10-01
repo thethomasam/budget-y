@@ -1,64 +1,104 @@
 import { useState } from 'react';
+import { HiPencil } from 'react-icons/hi';
 import { useData } from './DataContext';
 import { colorForCategory, buildCategoryColorMap } from './chartPalette';
 
-const BudgetInput = ({ value, onCommit }) => {
-  const [draft, setDraft] = useState(value);
+const CategoryRow = ({ category, color, onUpdate, onDelete }) => {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(category.name);
+  const [budget, setBudget] = useState(category.budget);
+  const [saving, setSaving] = useState(false);
 
-  const commit = () => {
-    const amount = Number(draft);
-    if (!Number.isNaN(amount) && amount >= 0) onCommit(amount);
-    else setDraft(value);
+  const startEdit = () => {
+    setName(category.name);
+    setBudget(category.budget);
+    setEditing(true);
   };
 
-  return (
-    <input
-      type="number"
-      min="0"
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
-      className="w-24 px-2 py-1 rounded border border-border bg-bg-primary text-text-primary text-sm text-right"
-    />
-  );
-};
+  const cancel = () => setEditing(false);
 
-const NameLabel = ({ name, onRename }) => {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(name);
+  const save = async () => {
+    const trimmedName = name.trim();
+    const amount = Number(budget);
+    if (!trimmedName || Number.isNaN(amount) || amount < 0) return;
 
-  const commit = () => {
-    const trimmed = draft.trim();
-    if (trimmed && trimmed !== name) onRename(trimmed);
-    else setDraft(name);
-    setEditing(false);
+    const fields = {};
+    if (trimmedName !== category.name) fields.name = trimmedName;
+    if (amount !== category.budget) fields.budget = amount;
+    if (Object.keys(fields).length === 0) {
+      setEditing(false);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await onUpdate(fields);
+      setEditing(false);
+    } catch (err) {
+      console.error('Error saving category:', err);
+      window.alert(err.message.includes('409') ? 'A category with that name already exists.' : 'Failed to save category.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (editing) {
     return (
-      <input
-        autoFocus
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.target.blur();
-          if (e.key === 'Escape') { setDraft(name); setEditing(false); }
-        }}
-        className="px-1.5 py-0.5 rounded border border-border bg-bg-primary text-text-primary text-sm min-w-0"
-      />
+      <div className="flex items-center gap-2 py-2.5 border-b border-border last:border-0">
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+        <input
+          autoFocus
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
+          className="flex-1 min-w-0 px-2 py-1 rounded border border-border bg-bg-primary text-text-primary text-sm"
+        />
+        <input
+          type="number"
+          min="0"
+          value={budget}
+          onChange={(e) => setBudget(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
+          className="w-24 px-2 py-1 rounded border border-border bg-bg-primary text-text-primary text-sm text-right"
+        />
+        <button
+          onClick={save}
+          disabled={saving}
+          className="px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-blue text-white hover:bg-primary-dark transition-colors disabled:opacity-50"
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+        <button onClick={cancel} className="text-xs text-text-secondary hover:text-text-primary">
+          Cancel
+        </button>
+      </div>
     );
   }
 
   return (
-    <button
-      onClick={() => { setDraft(name); setEditing(true); }}
-      className="text-sm font-medium text-text-primary truncate hover:text-primary-blue text-left"
-    >
-      {name}
-    </button>
+    <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+        <span className="text-sm font-medium text-text-primary truncate">{category.name}</span>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-sm text-text-primary">${category.budget.toFixed(0)}</span>
+        <button onClick={startEdit} className="text-text-secondary hover:text-primary-blue" aria-label="Edit">
+          <HiPencil size={14} />
+        </button>
+        <button
+          onClick={() => {
+            if (window.confirm(`Delete category "${category.name}"? Its transactions will become uncategorized.`)) {
+              onDelete();
+            }
+          }}
+          className="text-xs text-text-secondary hover:text-danger"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
   );
 };
 
@@ -103,7 +143,7 @@ const AddCategoryRow = ({ onAdd }) => {
 };
 
 const CategoryLimitsView = () => {
-  const { categories, loading, updateCategoryBudget, addCategory, renameCategory, deleteCategory } = useData();
+  const { categories, loading, updateCategory, addCategory, deleteCategory } = useData();
   const colorMap = buildCategoryColorMap(categories.map((c) => c.name));
   const totalBudget = categories.reduce((sum, c) => sum + c.budget, 0);
 
@@ -124,25 +164,13 @@ const CategoryLimitsView = () => {
         ) : (
           <div>
             {categories.map((c) => (
-              <div key={c.name} className="flex items-center justify-between gap-3 py-2.5 border-b border-border last:border-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorForCategory(colorMap, c.name) }} />
-                  <NameLabel name={c.name} onRename={(newName) => renameCategory(c.name, newName)} />
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <BudgetInput value={c.budget} onCommit={(amount) => updateCategoryBudget(c.name, amount)} />
-                  <button
-                    onClick={() => {
-                      if (window.confirm(`Delete category "${c.name}"? Its transactions will become uncategorized.`)) {
-                        deleteCategory(c.name);
-                      }
-                    }}
-                    className="text-xs text-text-secondary hover:text-danger"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
+              <CategoryRow
+                key={c.name}
+                category={c}
+                color={colorForCategory(colorMap, c.name)}
+                onUpdate={(fields) => updateCategory(c.name, fields)}
+                onDelete={() => deleteCategory(c.name)}
+              />
             ))}
           </div>
         )}

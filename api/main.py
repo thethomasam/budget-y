@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 import categories
+import recurring
 import transactions
 from database import Base, engine
 
@@ -19,3 +20,4 @@ app = FastAPI()
 
 app.include_router(transactions.router)
 app.include_router(categories.router)
+app.include_router(recurring.router)

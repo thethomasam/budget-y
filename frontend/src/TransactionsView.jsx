@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { useData } from './DataContext';
+import toast from 'react-hot-toast';
+import { useData, monthKey, monthLabelFor } from './DataContext';
 import { UNCATEGORIZED_LABEL } from './chartPalette';
 
 const fmtDate = (dateStr) =>
@@ -41,10 +42,101 @@ const CsvUploadButton = () => {
   );
 };
 
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const AddTransactionForm = ({ onClose }) => {
+  const { categories, addTransaction } = useData();
+  const [merchant, setMerchant] = useState('');
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(todayStr());
+  const [category, setCategory] = useState('');
+  const [card, setCard] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const inputClass = 'px-3 py-1.5 rounded-lg text-sm bg-bg-primary border border-border text-text-primary';
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const value = Number(amount);
+    if (!merchant.trim() || Number.isNaN(value) || value <= 0) return;
+
+    setSaving(true);
+    try {
+      await addTransaction({
+        merchant: merchant.trim(),
+        amount: value,
+        date,
+        card: card.trim(),
+        category: category || null,
+      });
+      toast.success('Transaction added');
+      onClose();
+    } catch (err) {
+      console.error('Error adding transaction:', err);
+      toast.error('Failed to add transaction');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="bg-bg-card rounded-2xl shadow-sm p-4 mb-3 flex flex-wrap items-end gap-2">
+      <input
+        autoFocus
+        type="text"
+        placeholder="Merchant"
+        value={merchant}
+        onChange={(e) => setMerchant(e.target.value)}
+        className={`${inputClass} flex-1 min-w-[160px]`}
+      />
+      <input
+        type="number"
+        min="0"
+        step="0.01"
+        placeholder="Amount"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        className={`${inputClass} w-28`}
+      />
+      <input type="date" value={date} onChange={(e) => setDate(e.target.value || todayStr())} className={inputClass} />
+      <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
+        <option value="">Auto-categorize</option>
+        {categories.map((c) => (
+          <option key={c.name} value={c.name}>{c.name}</option>
+        ))}
+      </select>
+      <input
+        type="text"
+        inputMode="numeric"
+        maxLength={4}
+        placeholder="Card (last 4)"
+        value={card}
+        onChange={(e) => setCard(e.target.value.replace(/\D/g, ''))}
+        className={`${inputClass} w-28`}
+      />
+      <button
+        type="submit"
+        disabled={saving}
+        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-primary-blue text-white hover:bg-primary-dark transition-colors disabled:opacity-50"
+      >
+        {saving ? 'Saving...' : 'Save'}
+      </button>
+      <button type="button" onClick={onClose} className="text-xs text-text-secondary hover:text-text-primary py-2">
+        Cancel
+      </button>
+    </form>
+  );
+};
+
 const TransactionsView = () => {
-  const { transactions, categories, loading, updateTransactionCategory, deleteTransaction } = useData();
+  const { transactions, categories, loading, availableMonths, updateTransactionCategory, deleteTransaction } = useData();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [monthFilter, setMonthFilter] = useState('all');
+  const [adding, setAdding] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -52,11 +144,12 @@ const TransactionsView = () => {
       .filter((t) => {
         const name = t.category || UNCATEGORIZED_LABEL;
         if (categoryFilter !== 'all' && name !== categoryFilter) return false;
+        if (monthFilter !== 'all' && monthKey(t.date) !== monthFilter) return false;
         if (q && !t.merchant.toLowerCase().includes(q) && !t.description?.toLowerCase().includes(q)) return false;
         return true;
       })
       .sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [transactions, search, categoryFilter]);
+  }, [transactions, search, categoryFilter, monthFilter]);
 
   const total = filtered.reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
@@ -69,8 +162,18 @@ const TransactionsView = () => {
             {filtered.length} transaction{filtered.length === 1 ? '' : 's'} · ${total.toFixed(2)}
           </p>
         </div>
-        <CsvUploadButton />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAdding((v) => !v)}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-bg-card border border-border text-text-primary hover:border-primary-blue transition-colors"
+          >
+            Add transaction
+          </button>
+          <CsvUploadButton />
+        </div>
       </div>
+
+      {adding && <AddTransactionForm onClose={() => setAdding(false)} />}
 
       <div className="flex gap-2 mb-3 flex-wrap">
         <input
@@ -80,6 +183,16 @@ const TransactionsView = () => {
           onChange={(e) => setSearch(e.target.value)}
           className="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg text-sm bg-bg-card border border-border text-text-primary"
         />
+        <select
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg text-sm bg-bg-card border border-border text-text-primary"
+        >
+          <option value="all">All months</option>
+          {availableMonths.map((key) => (
+            <option key={key} value={key}>{monthLabelFor(key)}</option>
+          ))}
+        </select>
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}

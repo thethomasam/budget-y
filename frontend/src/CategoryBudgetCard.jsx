@@ -99,6 +99,18 @@ const CategoryBudgetCard = () => {
           ))}
         </div>
       )}
+
+      {!loading && categorySpend.length > 0 && (
+        <div className="border-t-2 border-border mt-1">
+          <BarRow
+            name="Total"
+            spent={monthTotal}
+            budget={totalBudget}
+            color="#6C7A89"
+            editable={false}
+          />
+        </div>
+      )}
     </div>
   );
 };

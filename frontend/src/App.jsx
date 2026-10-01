@@ -4,9 +4,11 @@ import { DataProvider, useData, monthLabelFor } from './DataContext';
 import CategoryBudgetCard from './CategoryBudgetCard';
 import DailySpendCard from './DailySpendCard';
 import MonthlyTrendCard from './MonthlyTrendCard';
+import SavingsCard from './SavingsCard';
 import CategoryTrendCard from './CategoryTrendCard';
 import TransactionsView from './TransactionsView';
 import CategoryLimitsView from './CategoryLimitsView';
+import SimilarTransactionsPrompt from './SimilarTransactionsPrompt';
 
 function SummaryHeader() {
   const { monthTotal, monthLabel, error, selectedMonth, setSelectedMonth, availableMonths } = useData();
@@ -37,6 +39,7 @@ function Dashboard() {
   return (
     <div className="max-w-5xl mx-auto p-4">
       <SummaryHeader />
+      <SavingsCard />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CategoryBudgetCard />
         <DailySpendCard />
@@ -84,6 +87,7 @@ function App() {
     <DataProvider>
       <div className="min-h-screen bg-bg-primary">
         <Toaster position="bottom-right" />
+        <SimilarTransactionsPrompt />
         <Nav activeView={activeView} onChange={setActiveView} />
         {activeView === 'dashboard' ? (
           <Dashboard />

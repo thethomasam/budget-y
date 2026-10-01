@@ -20,6 +20,14 @@ def parse_date(value: str) -> date_type:
     raise CsvParseError(f"Unrecognized date format: {value!r}")
 
 
+def is_card_payment(merchant: str) -> bool:
+    # Card issuers post the bill payment itself as a transaction line like
+    # "THANK YOU FOR YOUR PAYMENT" or, on Amex, "...THANKYOU..." as one word
+    # -- that's paying off the card, not a purchase, so it should never be
+    # ingested as spend. Compare with spaces stripped so both spellings match.
+    return "thankyou" in merchant.lower().replace(" ", "")
+
+
 class BankCsvParser(ABC):
     """Base class for one bank/card CSV export shape """
 
@@ -27,7 +35,15 @@ class BankCsvParser(ABC):
     def can_parse(self, content: str) -> bool: ...
 
     @abstractmethod
-    def parse(self, content: str) -> list[dict]: ...
+    def parse_rows(self, content: str) -> list[dict]:
+        """Turn raw CSV text into row dicts (date, amount, merchant, card)."""
+
+    def parse(self, content: str) -> list[dict]:
+        return [
+            row
+            for row in self.parse_rows(content)
+            if not is_card_payment(row.get("merchant", ""))
+        ]
 
 
 class HeaderedCsvParser(BankCsvParser):
@@ -43,8 +59,8 @@ class HeaderedCsvParser(BankCsvParser):
         except csv.Error:
             return False
 
-    def parse(self, content: str) -> list[dict]:
-        reader = csv.DictReader(io.StringIO(content))
+    def parse_rows(self, content: str) -> list[dict]:
+        reader =csv.DictReader(io.StringIO(content))
         columns = {name.strip().lower() for name in reader.fieldnames or []}
         if not self.required_columns.issubset(columns) or not columns & set(
             self.merchant_aliases
@@ -74,7 +90,7 @@ class AnzHeaderlessCsvParser(BankCsvParser):
         except csv.Error:
             return True
 
-    def parse(self, content: str) -> list[dict]:
+    def parse_rows(self, content: str) -> list[dict]:
         return [
             dict(zip(self.columns, (cell.strip() for cell in row)), card="")
             for row in csv.reader(io.StringIO(content))

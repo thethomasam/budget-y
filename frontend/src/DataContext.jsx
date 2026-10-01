@@ -13,7 +13,7 @@ export const useData = () => {
   return context;
 };
 
-const monthKey = (dateStr) => {
+export const monthKey = (dateStr) => {
   const d = new Date(dateStr);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
@@ -26,17 +26,26 @@ export const monthLabelFor = (key) => {
 export const DataProvider = ({ children }) => {
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [recurring, setRecurring] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(monthKey(new Date()));
+  // { category, sourceMerchant, candidates } | null -- rendered by
+  // SimilarTransactionsPrompt at the app root, so it survives a tab switch.
+  const [similarPrompt, setSimilarPrompt] = useState(null);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const [txns, cats] = await Promise.all([api.listTransactions(), api.listCategories()]);
+      const [txns, cats, recurringItems] = await Promise.all([
+        api.listTransactions(),
+        api.listCategories(),
+        api.listRecurring(),
+      ]);
       setTransactions(txns);
       setCategories(cats);
+      setRecurring(recurringItems);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message);
@@ -51,6 +60,11 @@ export const DataProvider = ({ children }) => {
 
   const updateCategoryBudget = async (name, budget) => {
     await api.updateCategory(name, { budget });
+    await fetchData();
+  };
+
+  const updateCategory = async (name, fields) => {
+    await api.updateCategory(name, fields);
     await fetchData();
   };
 
@@ -70,7 +84,43 @@ export const DataProvider = ({ children }) => {
   };
 
   const updateTransactionCategory = async (id, category) => {
+    const changed = transactions.find((t) => t.id === id);
+
     await api.updateTransactionCategory(id, category);
+    await fetchData();
+    if (changed) {
+      const similar = (await api.findSimilarTransactions(id))
+        .filter((t) => (t.category || null) !== category);
+      if (similar.length > 0) {
+        setSimilarPrompt({ category, sourceMerchant: changed.merchant, candidates: similar });
+      }
+    }
+  };
+
+  const resolveSimilarPrompt = async (selectedIds) => {
+    if (!similarPrompt) return;
+    const { category } = similarPrompt;
+    setSimilarPrompt(null);
+    if (selectedIds.length > 0) {
+      await Promise.all(selectedIds.map((id) => api.updateTransactionCategory(id, category)));
+      await fetchData();
+    }
+  };
+
+  const dismissSimilarPrompt = () => setSimilarPrompt(null);
+
+  const addRecurring = async (fields) => {
+    const item = await api.addRecurring(fields);
+    setRecurring((items) => [...items, item]);
+  };
+
+  const deleteRecurring = async (id) => {
+    await api.deleteRecurring(id);
+    setRecurring((items) => items.filter((i) => i.id !== id));
+  };
+
+  const addTransaction = async (fields) => {
+    await api.addTransaction(fields);
     await fetchData();
   };
 
@@ -160,6 +210,32 @@ export const DataProvider = ({ children }) => {
       });
   }, [transactions]);
 
+  // Recurring items normalised to a per-month amount (52 weeks / 26 fortnights
+  // a year).
+  const { monthlyIncome, monthlyFixed } = useMemo(() => {
+    const perMonth = { weekly: 52 / 12, fortnightly: 26 / 12, monthly: 1 };
+    const sum = (kind) =>
+      recurring.filter((r) => r.kind === kind).reduce((s, r) => s + r.amount * perMonth[r.frequency], 0);
+    return { monthlyIncome: sum('income'), monthlyFixed: sum('expense') };
+  }, [recurring]);
+
+  // Savings = income - fixed costs (rent...) - card spend. The in-progress
+  // current month is left out of the average (it's only partly spent) unless
+  // it's the only month we have.
+  const savings = useMemo(() => {
+    const totals = {};
+    transactions.forEach((t) => {
+      const key = monthKey(t.date);
+      totals[key] = (totals[key] || 0) + Math.abs(t.amount);
+    });
+    const current = monthKey(new Date());
+    let keys = Object.keys(totals).sort();
+    if (keys.length > 1) keys = keys.filter((k) => k !== current);
+    const months = keys.map((key) => ({ key, spent: totals[key], saved: monthlyIncome - monthlyFixed - totals[key] }));
+    const averageSaved = months.length ? months.reduce((s, m) => s + m.saved, 0) / months.length : 0;
+    return { months, averageSaved };
+  }, [transactions, monthlyIncome, monthlyFixed]);
+
   // Per-category spend across every month that has transactions, oldest first.
   const categoryMonthlyTrend = useMemo(() => {
     const byMonth = {};
@@ -191,10 +267,21 @@ export const DataProvider = ({ children }) => {
     error,
     refetch: fetchData,
     updateCategoryBudget,
+    updateCategory,
     addCategory,
     renameCategory,
     deleteCategory,
     updateTransactionCategory,
+    similarPrompt,
+    resolveSimilarPrompt,
+    dismissSimilarPrompt,
+    recurring,
+    addRecurring,
+    deleteRecurring,
+    monthlyIncome,
+    monthlyFixed,
+    savings,
+    addTransaction,
     deleteTransaction,
     ingestTransactionsCsv,
     categorySpend,

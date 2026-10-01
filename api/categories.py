@@ -41,7 +41,7 @@ def add_category(payload: CategoryIn, db: Session = Depends(get_db)):
     return category
 
 
-@router.patch("/categories/{name}", response_model=CategoryOut)
+@router.patch("/categories/{name:path}",response_model=CategoryOut)
 def update_category(name: str, payload: CategoryUpdate, db: Session = Depends(get_db)):
     category = db.query(Category).filter(Category.name == name).first()
     if category is None:
@@ -57,7 +57,7 @@ def update_category(name: str, payload: CategoryUpdate, db: Session = Depends(ge
     return category
 
 
-@router.delete("/categories/{name}", status_code=204)
+@router.delete("/categories/{name:path}",status_code=204)
 def delete_category(name: str, db: Session = Depends(get_db)):
     category = db.query(Category).filter(Category.name == name).first()
     if category is None:
