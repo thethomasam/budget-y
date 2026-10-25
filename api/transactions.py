@@ -6,12 +6,13 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy.orm import Session
 
+from auth import get_current_user
 from categorizer import categorize_merchant
 from csv_parsers import CsvParseError, parse_csv, parse_date
 from database import SessionLocal, get_db
 from ingest_queue import enqueue, get_job, set_progress
 from location_trie import MerchantCleaner
-from models import Category, Transaction
+from models import Category, Transaction, User
 
 router = APIRouter(tags=["transactions"])
 _cleaner = MerchantCleaner.default()
@@ -29,10 +30,10 @@ def _coerce_amount(value):
         raise ValueError(f"amount must be a valid number, got {value!r}")
 
 
-def _resolve_category(name: str | None, db: Session) -> Category | None:
+def _resolve_category(name: str | None, db: Session, user: User) -> Category | None:
     if name is None:
         return None
-    category = db.query(Category).filter(Category.name == name).first()
+    category = db.query(Category).filter(Category.user_id == user.id, Category.name == name).first()
     if category is None:
         raise HTTPException(status_code=422, detail=f"Unknown category: {name!r}")
     return category
@@ -83,23 +84,33 @@ class TransactionOut(BaseModel):
         return value.name if isinstance(value, Category) else value
 
 
+def _get_owned(db: Session, user: User, transaction_id: int) -> Transaction:
+    transaction = db.get(Transaction, transaction_id)
+    if transaction is None or transaction.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return transaction
+
+
 @router.get("/transaction", response_model=list[TransactionOut])
-def list_transactions(db: Session = Depends(get_db)):
-    return db.query(Transaction).all()
+def list_transactions(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return db.query(Transaction).filter(Transaction.user_id == user.id).all()
 
 
 @router.post("/transaction", response_model=TransactionOut, status_code=201)
-def add_transaction(payload: TransactionIn, db: Session = Depends(get_db)):
+def add_transaction(
+    payload: TransactionIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
     merchant = re.sub(r"\s+", " ", payload.merchant).strip()
     if not merchant:
         raise HTTPException(status_code=422, detail="merchant must not be empty")
     row_date = payload.date or date_type.today()
     category = (
-        _resolve_category(payload.category, db)
+        _resolve_category(payload.category, db, user)
         if payload.category
-        else categorize_merchant(merchant, db)
+        else categorize_merchant(merchant, db, user.id)
     )
     transaction = Transaction(
+        user_id=user.id,
         amount=payload.amount,
         merchant=merchant,
         card=payload.card,
@@ -135,14 +146,16 @@ def _signature(amount: float, merchant: str, row_date: date_type) -> tuple:
     return (round(amount, 2), merchant.lower(), row_date)
 
 
-def _ingest_rows(job_id: str, rows: list[dict]) -> IngestResult:
+def _ingest_rows(job_id: str, rows: list[dict], user_id: int) -> IngestResult:
     db = SessionLocal()
     try:
         existing = {
             _signature(amount, merchant, row_date)
             for amount, merchant, row_date in db.query(
                 Transaction.amount, Transaction.merchant, Transaction.date
-            ).all()
+            )
+            .filter(Transaction.user_id == user_id)
+            .all()
         }
 
         created = []
@@ -165,12 +178,13 @@ def _ingest_rows(job_id: str, rows: list[dict]) -> IngestResult:
                 existing.add(signature)
 
                 transaction = Transaction(
+                    user_id=user_id,
                     amount=amount,
                     merchant=merchant,
                     card=row.get("card", ""),
                     date=row_date,
                     description=row.get("description") or f"{merchant} on {row_date.isoformat()}",
-                    category=categorize_merchant(merchant, db),
+                    category=categorize_merchant(merchant, db, user_id),
                 )
                 db.add(transaction)
                 created.append(transaction)
@@ -186,7 +200,9 @@ def _ingest_rows(job_id: str, rows: list[dict]) -> IngestResult:
 
 
 @router.post("/transaction/csv", response_model=IngestJobOut, status_code=202)
-def ingest_transactions_csv(file: UploadFile = File(...)):
+def ingest_transactions_csv(
+    file: UploadFile = File(...), user: User = Depends(get_current_user)
+):
     content = file.file.read().decode("utf-8-sig")
     try:
         rows = parse_csv(content)
@@ -197,24 +213,24 @@ def ingest_transactions_csv(file: UploadFile = File(...)):
     except (CsvParseError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
-    job_id = enqueue(lambda job_id: _ingest_rows(job_id, rows), total=len(rows))
+    user_id = user.id
+    job_id = enqueue(lambda job_id: _ingest_rows(job_id, rows, user_id), owner=user_id, total=len(rows))
     return IngestJobOut(job_id=job_id, status="pending")
 
 
 @router.get("/transaction/csv/{job_id}", response_model=None)
-def get_ingest_job(job_id: str):
-    job = get_job(job_id)
+def get_ingest_job(job_id: str, user: User = Depends(get_current_user)):
+    job = get_job(job_id, user.id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 
 @router.get("/transaction/{transaction_id}", response_model=TransactionOut)
-def get_transaction(transaction_id: int, db: Session = Depends(get_db)):
-    transaction = db.get(Transaction, transaction_id)
-    if transaction is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    return transaction
+def get_transaction(
+    transaction_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return _get_owned(db, user, transaction_id)
 
 
 def _clean_for_match(merchant: str) -> str:
@@ -228,15 +244,19 @@ def _clean_for_match(merchant: str) -> str:
 
 
 @router.get("/transaction/{transaction_id}/similar", response_model=list[TransactionOut])
-def find_similar_transactions(transaction_id: int, db: Session = Depends(get_db)):
+def find_similar_transactions(
+    transaction_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
     """Other transactions whose merchant name fuzzy-matches this one"""
-    transaction = db.get(Transaction, transaction_id)
-    if transaction is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+    transaction = _get_owned(db, user, transaction_id)
 
     target_key = _clean_for_match(transaction.merchant)
 
-    others = db.query(Transaction).filter(Transaction.id != transaction_id).all()
+    others = (
+        db.query(Transaction)
+        .filter(Transaction.user_id == user.id, Transaction.id != transaction_id)
+        .all()
+    )
     by_cleaned_name: dict[str, list[Transaction]] = {}
     for t in others:
         by_cleaned_name.setdefault(_clean_for_match(t.merchant), []).append(t)
@@ -247,14 +267,15 @@ def find_similar_transactions(transaction_id: int, db: Session = Depends(get_db)
 
 @router.patch("/transaction/{transaction_id}", response_model=TransactionOut)
 def update_transaction(
-    transaction_id: int, payload: TransactionUpdate, db: Session = Depends(get_db)
+    transaction_id: int,
+    payload: TransactionUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    transaction = db.get(Transaction, transaction_id)
-    if transaction is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+    transaction = _get_owned(db, user, transaction_id)
     updates = payload.model_dump(exclude_unset=True)
     if "category" in updates:
-        transaction.category = _resolve_category(updates.pop("category"), db)
+        transaction.category = _resolve_category(updates.pop("category"), db, user)
     for field, value in updates.items():
         setattr(transaction, field, value)
     db.commit()
@@ -264,27 +285,28 @@ def update_transaction(
 
 @router.patch("/transaction/{transaction_id}/category", response_model=TransactionOut)
 def update_transaction_category(
-    transaction_id: int, payload: CategoryUpdate, db: Session = Depends(get_db)
+    transaction_id: int,
+    payload: CategoryUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    transaction = db.get(Transaction, transaction_id)
-    if transaction is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    transaction.category = _resolve_category(payload.category, db)
+    transaction = _get_owned(db, user, transaction_id)
+    transaction.category = _resolve_category(payload.category, db, user)
     db.commit()
     db.refresh(transaction)
     return transaction
 
 
 @router.delete("/transaction/{transaction_id}", status_code=204)
-def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
-    transaction = db.get(Transaction, transaction_id)
-    if transaction is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+def delete_transaction(
+    transaction_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    transaction = _get_owned(db, user, transaction_id)
     db.delete(transaction)
     db.commit()
 
 
 @router.delete("/transaction", status_code=204)
-def delete_all_transactions(db: Session = Depends(get_db)):
-    db.query(Transaction).delete()
+def delete_all_transactions(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    db.query(Transaction).filter(Transaction.user_id == user.id).delete()
     db.commit()

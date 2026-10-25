@@ -1,14 +1,59 @@
 const BASE = '/api';
+const TOKEN_KEY = 'auth.token';
+const USER_KEY = 'auth.username';
 
-async function request(path, options) {
-  const res = await fetch(`${BASE}${path}`, options);
+const readStored = (key) => {
+  try { return localStorage.getItem(key); } catch { return null; }
+};
+
+export const getToken = () => readStored(TOKEN_KEY);
+export const getUsername = () => readStored(USER_KEY);
+
+export const setSession = (token, username) => {
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(USER_KEY, username);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+    }
+  } catch { /* ignore */ }
+};
+
+// Called when the server rejects our token (expired or signed out elsewhere).
+let onUnauthorized = () => {};
+export const setUnauthorizedHandler = (handler) => { onUnauthorized = handler; };
+
+async function request(path, options = {}) {
+  const token = getToken();
+  const headers = token ? { ...options.headers, Authorization: `Bearer ${token}` } : options.headers;
+  const res = await fetch(`${BASE}${path}`, { ...options, headers });
   if (!res.ok) {
+    if (res.status === 401 && token && !path.startsWith('/auth/')) onUnauthorized();
     const body = await res.text().catch(() => '');
-    throw new Error(`${options?.method || 'GET'} ${path} failed: ${res.status} ${body}`);
+    let detail = body;
+    try { detail = JSON.parse(body).detail || body; } catch { /* not JSON */ }
+    const error = new Error(`${options.method || 'GET'} ${path} failed: ${res.status} ${body}`);
+    error.detail = typeof detail === 'string' ? detail : 'Request failed';
+    throw error;
   }
   if (res.status === 204) return null;
   return res.json();
 }
+
+const postJson = (path, fields) =>
+  request(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  });
+
+export const login = (username, password) => postJson('/auth/login', { username, password });
+
+export const register = (username, password) => postJson('/auth/register', { username, password });
+
+export const logout = () => request('/auth/logout', { method: 'POST' });
 
 export const listTransactions = () => request('/transaction');
 

@@ -28,7 +28,7 @@ from sqlalchemy.orm import sessionmaker
 from categorizer import categorize_merchant
 from csv_parsers import parse_csv, parse_date
 from database import Base
-from models import Category, Transaction
+from models import Category, Transaction, User
 from transactions import _coerce_amount
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent
@@ -59,8 +59,11 @@ def main():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(bind=engine)
     db = sessionmaker(bind=engine)()
+    user = User(username="eval", password_hash="")
+    db.add(user)
+    db.flush()
     for name in CATEGORIES:
-        db.add(Category(name=name))
+        db.add(Category(user_id=user.id, name=name))
     db.commit()
 
     results = []  # (merchant, expected, predicted)
@@ -72,7 +75,7 @@ def main():
             print(f"WARNING: no label for {merchant!r}, skipping")
             continue
 
-        category = categorize_merchant(merchant, db)
+        category = categorize_merchant(merchant, db, user.id)
         predicted = category.name if category else "none"
         mark = "OK  " if predicted == expected else "MISS"
         print(f"[{i}/{total}] {mark} {merchant[:50]:52} expected={expected:10} got={predicted}")
@@ -84,6 +87,7 @@ def main():
         row_date = parse_date(row["date"]) if row.get("date") else date_type.today()
         db.add(
             Transaction(
+                user_id=user.id,
                 amount=amount,
                 merchant=merchant,
                 card=row.get("card", ""),

@@ -9,6 +9,8 @@ import CategoryTrendCard from './CategoryTrendCard';
 import TransactionsView from './TransactionsView';
 import CategoryLimitsView from './CategoryLimitsView';
 import SimilarTransactionsPrompt from './SimilarTransactionsPrompt';
+import { AuthProvider, useAuth } from './AuthContext';
+import LoginView from './LoginView';
 
 function SummaryHeader() {
   const { monthTotal, monthLabel, error, selectedMonth, setSelectedMonth, availableMonths } = useData();
@@ -59,9 +61,11 @@ const TABS = [
 ];
 
 function Nav({ activeView, onChange }) {
+  const { username, logout } = useAuth();
+
   return (
     <div className="border-b border-border bg-bg-card">
-      <div className="max-w-5xl mx-auto px-4 flex gap-1">
+      <div className="max-w-5xl mx-auto px-4 flex gap-1 items-center">
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -75,12 +79,16 @@ function Nav({ activeView, onChange }) {
             {tab.label}
           </button>
         ))}
+        <div className="ml-auto flex items-center gap-3 text-xs text-text-secondary">
+          <span>{username}</span>
+          <button onClick={logout} className="hover:text-primary-blue">Sign out</button>
+        </div>
       </div>
     </div>
   );
 }
 
-function App() {
+function AuthedApp() {
   const [activeView, setActiveView] = useState('dashboard');
 
   return (
@@ -99,6 +107,20 @@ function App() {
       </div>
     </DataProvider>
   );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
+  );
+}
+
+// Keyed by username so signing out and in as someone else starts from empty state.
+function AuthGate() {
+  const { username } = useAuth();
+  return username ? <AuthedApp key={username} /> : <LoginView />;
 }
 
 export default App;

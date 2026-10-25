@@ -10,6 +10,7 @@ import threading
 import uuid
 
 _jobs = {}
+_owners = {}  # job_id -> user_id, so users can only poll their own jobs
 _queue = queue.Queue()
 
 
@@ -29,8 +30,9 @@ def _worker():
 threading.Thread(target=_worker, daemon=True).start()
 
 
-def enqueue(fn, total: int = 0) -> str:
+def enqueue(fn, owner: int, total: int = 0) -> str:
     job_id = uuid.uuid4().hex
+    _owners[job_id] = owner
     _jobs[job_id] = {"status": "pending", "processed": 0, "total": total}
     _queue.put((job_id, fn))
     return job_id
@@ -42,5 +44,7 @@ def set_progress(job_id: str, processed: int) -> None:
         job["processed"] = processed
 
 
-def get_job(job_id: str) -> dict | None:
+def get_job(job_id: str, owner: int) -> dict | None:
+    if _owners.get(job_id) != owner:
+        return None
     return _jobs.get(job_id)

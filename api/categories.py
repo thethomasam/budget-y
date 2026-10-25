@@ -3,7 +3,8 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Category, Transaction
+from auth import get_current_user
+from models import Category, Transaction, User
 
 router = APIRouter(tags=["categories"])
 
@@ -25,16 +26,22 @@ class CategoryOut(BaseModel):
     budget: float
 
 
+def _find(db: Session, user: User, name: str) -> Category | None:
+    return db.query(Category).filter(Category.user_id == user.id, Category.name == name).first()
+
+
 @router.get("/categories", response_model=list[CategoryOut])
-def list_categories(db: Session = Depends(get_db)):
-    return db.query(Category).order_by(Category.name).all()
+def list_categories(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return db.query(Category).filter(Category.user_id == user.id).order_by(Category.name).all()
 
 
 @router.post("/categories", response_model=CategoryOut, status_code=201)
-def add_category(payload: CategoryIn, db: Session = Depends(get_db)):
-    if db.query(Category).filter(Category.name == payload.name).first() is not None:
+def add_category(
+    payload: CategoryIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    if _find(db, user, payload.name) is not None:
         raise HTTPException(status_code=409, detail="Category already exists")
-    category = Category(name=payload.name, budget=payload.budget)
+    category = Category(user_id=user.id, name=payload.name, budget=payload.budget)
     db.add(category)
     db.commit()
     db.refresh(category)
@@ -42,13 +49,18 @@ def add_category(payload: CategoryIn, db: Session = Depends(get_db)):
 
 
 @router.patch("/categories/{name:path}",response_model=CategoryOut)
-def update_category(name: str, payload: CategoryUpdate, db: Session = Depends(get_db)):
-    category = db.query(Category).filter(Category.name == name).first()
+def update_category(
+    name: str,
+    payload: CategoryUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    category = _find(db, user, name)
     if category is None:
         raise HTTPException(status_code=404, detail="Category not found")
     updates = payload.model_dump(exclude_unset=True)
     if "name" in updates and updates["name"] != name:
-        if db.query(Category).filter(Category.name == updates["name"]).first() is not None:
+        if _find(db, user, updates["name"]) is not None:
             raise HTTPException(status_code=409, detail="Category already exists")
     for field, value in updates.items():
         setattr(category, field, value)
@@ -58,8 +70,10 @@ def update_category(name: str, payload: CategoryUpdate, db: Session = Depends(ge
 
 
 @router.delete("/categories/{name:path}",status_code=204)
-def delete_category(name: str, db: Session = Depends(get_db)):
-    category = db.query(Category).filter(Category.name == name).first()
+def delete_category(
+    name: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    category = _find(db, user, name)
     if category is None:
         raise HTTPException(status_code=404, detail="Category not found")
     db.query(Transaction).filter(Transaction.category_id == category.id).update(

@@ -12,9 +12,13 @@ from models import Category, Transaction
 _cleaner = MerchantCleaner.default()
 
 
-def _match_similar_merchant(merchant: str, db: Session) -> Category | None:
+def _match_similar_merchant(merchant: str, db: Session, user_id: int) -> Category | None:
     """Reuse the category of a previously-seen, similarly-named merchant."""
-    categorized = db.query(Transaction).filter(Transaction.category_id.isnot(None)).all()
+    categorized = (
+        db.query(Transaction)
+        .filter(Transaction.user_id == user_id, Transaction.category_id.isnot(None))
+        .all()
+    )
     by_merchant = {t.merchant.strip(): t.category for t in categorized}
     by_cleaned = {
         _cleaner.clean(name)[0].lower(): name for name in by_merchant
@@ -72,18 +76,18 @@ def _ask_llm(merchant: str, snippet: str, categories: list[str]) -> str | None:
     return next((c for c in categories if c.lower().rstrip("s") == answer.rstrip("s")), None)
 
 
-def categorize_merchant(merchant: str, db: Session) -> Category | None:
+def categorize_merchant(merchant: str, db: Session, user_id: int) -> Category | None:
     """Find a category for a merchant: reuse a similar past merchant's category,
     otherwise search the web for the merchant and ask the local LLM to pick one."""
-    match = _match_similar_merchant(merchant, db)
+    match = _match_similar_merchant(merchant, db, user_id)
     if match is not None:
         return match
 
-    categories = [row[0] for row in db.query(Category.name).all()]
+    categories = [row[0] for row in db.query(Category.name).filter(Category.user_id == user_id)]
     business_name, location = _cleaner.clean(merchant)
     snippet = _search_merchant(business_name, location)
     name = _ask_llm(merchant, snippet, categories)
     if name is None:
         print("not found")
         return None
-    return db.query(Category).filter(Category.name == name).first()
+    return db.query(Category).filter(Category.user_id == user_id, Category.name == name).first()
