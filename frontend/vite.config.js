@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     base: '/app/',
     server: {
+      allowedHosts: ['budget.samsllama.com'],
       port: 5173,
       proxy: {
         '/api': {

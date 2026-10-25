@@ -66,9 +66,10 @@ const BarRow = ({ name, spent, budget, color, editable, onEditBudget }) => {
 };
 
 const CategoryBudgetCard = () => {
-  const { categorySpend, monthTotal, monthLabel, loading, updateCategoryBudget } = useData();
+  const { categorySpend, monthLabel, loading, updateCategoryBudget } = useData();
   const colorMap = buildCategoryColorMap(categorySpend.map((c) => c.name));
   const totalBudget = categorySpend.reduce((sum, c) => sum + c.budget, 0);
+  const totalSpent = categorySpend.reduce((sum, c) => sum + c.spent, 0);
 
   return (
     <div className="bg-bg-card rounded-2xl p-4 shadow-sm hover:shadow-md transition-all">
@@ -77,7 +78,7 @@ const CategoryBudgetCard = () => {
         <span className="text-xs text-text-secondary">{monthLabel}</span>
       </div>
       <div className="text-xs text-text-secondary mb-3">
-        ${monthTotal.toFixed(0)} spent of ${totalBudget.toFixed(0)} budgeted
+        ${totalSpent.toFixed(0)} spent of ${totalBudget.toFixed(0)} budgeted
       </div>
 
       {loading ? (
@@ -104,7 +105,7 @@ const CategoryBudgetCard = () => {
         <div className="border-t-2 border-border mt-1">
           <BarRow
             name="Total"
-            spent={monthTotal}
+            spent={totalSpent}
             budget={totalBudget}
             color="#6C7A89"
             editable={false}

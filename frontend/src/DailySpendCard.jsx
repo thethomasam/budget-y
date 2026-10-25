@@ -3,7 +3,6 @@ import {
   ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 import { useData } from './DataContext';
-import { UNCATEGORIZED_LABEL } from './chartPalette';
 
 const axisTick = { fill: '#898781', fontSize: 11 };
 const dollarTick = (v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`;
@@ -37,7 +36,7 @@ const DayDetailPanel = ({ day, transactions, monthLabel, onClose }) => (
           <div key={t.id} className="flex items-center justify-between gap-3 py-1.5 border-b border-border last:border-0">
             <div className="min-w-0">
               <div className="text-sm text-text-primary truncate">{t.merchant}</div>
-              <div className="text-xs text-text-secondary">{t.category || UNCATEGORIZED_LABEL}</div>
+              <div className="text-xs text-text-secondary">{t.category}</div>
             </div>
             <span className="text-sm font-medium text-text-primary shrink-0">${Math.abs(t.amount).toFixed(2)}</span>
           </div>

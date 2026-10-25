@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import * as api from './api';
-import { UNCATEGORIZED_LABEL } from './chartPalette';
 
 const DataContext = createContext();
 
@@ -12,6 +11,8 @@ export const useData = () => {
   }
   return context;
 };
+
+const PROJECTED_MONTHS = 6;
 
 export const monthKey = (dateStr) => {
   const d = new Date(dateStr);
@@ -165,18 +166,16 @@ export const DataProvider = ({ children }) => {
 
   const monthTransactions = transactions.filter((t) => monthKey(t.date) === selectedMonth);
 
-  // Spend per category, for the selected month only.
-  const categoryTotals = {};
-  monthTransactions.forEach((t) => {
-    const name = t.category || UNCATEGORIZED_LABEL;
-    categoryTotals[name] = (categoryTotals[name] || 0) + Math.abs(t.amount);
-  });
-  const budgetByName = Object.fromEntries(categories.map((c) => [c.name, c.budget]));
-  // Every known category, even ones with no spend this month, plus
-  // Uncategorized when there are uncategorized transactions this month.
-  const allNames = new Set([...categories.map((c) => c.name), ...Object.keys(categoryTotals)]);
-  const categorySpend = [...allNames]
-    .map((name) => ({ name, spent: categoryTotals[name] || 0, budget: budgetByName[name] || 0 }))
+  // Spend per category, for the selected month only. Transactions without a
+  // category aren't shown here.
+  const categorySpend = categories
+    .map((c) => ({
+      name: c.name,
+      budget: c.budget,
+      spent: monthTransactions
+        .filter((t) => t.category === c.name)
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0),
+    }))
     .sort((a, b) => b.spent - a.spent);
 
   // Day-by-day spend for the selected month: up to today if it's the current
@@ -186,7 +185,7 @@ export const DataProvider = ({ children }) => {
   const daysToShow = isCurrentMonth ? now.getDate() : daysInMonth;
   const dailySpend = Array.from({ length: daysToShow }, (_, i) => {
     const day = i + 1;
-    const dayTransactions = monthTransactions.filter((t) => new Date(t.date).getDate() === day);
+    const dayTransactions = monthTransactions.filter((t) => t.category && new Date(t.date).getDate() === day);
     const total = dayTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
     return { day, amount: total, transactions: dayTransactions };
   });
@@ -236,13 +235,60 @@ export const DataProvider = ({ children }) => {
     return { months, averageSaved };
   }, [transactions, monthlyIncome, monthlyFixed]);
 
+  // Next few months. The current month and the one after it use what's actually
+  // been spent so far this month; every month after that uses the category
+  // limits. Each month starts from the
+  // previous month's projected savings (the first starts from last month's
+  // savings), then adds income and subtracts fixed costs and spend.
+  const projection = useMemo(() => {
+    const lastMonth = savings.months[savings.months.length - 1];
+    const lastMonthSavings = lastMonth ? lastMonth.saved : 0;
+
+    const currentKey = monthKey(new Date());
+    const nextDate = new Date();
+    nextDate.setDate(1);
+    nextDate.setMonth(nextDate.getMonth() + 1);
+    const nextKey = monthKey(nextDate);
+    let spentThisMonth = 0;
+    transactions.forEach((t) => {
+      if (monthKey(t.date) === currentKey) spentThisMonth += Math.abs(t.amount);
+    });
+
+    let totalCategoryLimit = 0;
+    categories.forEach((category) => {
+      totalCategoryLimit += category.budget || 0;
+    });
+
+    const months = [];
+    if (lastMonth) {
+      let [year, month] = lastMonth.key.split('-').map(Number);
+      let savingsSoFar = lastMonthSavings;
+      for (let i = 0; i < PROJECTED_MONTHS; i += 1) {
+        month += 1;
+        if (month > 12) {
+          month = 1;
+          year += 1;
+        }
+        const key = `${year}-${String(month).padStart(2, '0')}`;
+        const followsCurrentSpend = key === currentKey || key === nextKey;
+        const spend = followsCurrentSpend ? spentThisMonth : totalCategoryLimit;
+        savingsSoFar += monthlyIncome - monthlyFixed - spend;
+        months.push({ key, projected: savingsSoFar, spend, followsCurrentSpend });
+      }
+    }
+
+    const projectedSavings = months.length ? months[0].projected : 0;
+    return { lastMonthSavings, months, projectedSavings };
+  }, [savings, transactions, categories, monthlyIncome, monthlyFixed]);
+
   // Per-category spend across every month that has transactions, oldest first.
   const categoryMonthlyTrend = useMemo(() => {
     const byMonth = {};
     const totalsByCategory = {};
     transactions.forEach((t) => {
       const key = monthKey(t.date);
-      const name = t.category || UNCATEGORIZED_LABEL;
+      const name = t.category;
+      if (!name) return;
       byMonth[key] = byMonth[key] || {};
       byMonth[key][name] = (byMonth[key][name] || 0) + Math.abs(t.amount);
       totalsByCategory[name] = (totalsByCategory[name] || 0) + Math.abs(t.amount);
@@ -281,6 +327,7 @@ export const DataProvider = ({ children }) => {
     monthlyIncome,
     monthlyFixed,
     savings,
+    projection,
     addTransaction,
     deleteTransaction,
     ingestTransactionsCsv,
