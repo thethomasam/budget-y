@@ -219,8 +219,8 @@ export const DataProvider = ({ children }) => {
   }, [recurring]);
 
   // Savings = income - fixed costs (rent...) - card spend. The in-progress
-  // current month is left out of the average (it's only partly spent) unless
-  // it's the only month we have.
+  // current month and any later ones are left out (they're only partly spent)
+  // unless there's no earlier month at all.
   const savings = useMemo(() => {
     const totals = {};
     transactions.forEach((t) => {
@@ -229,7 +229,8 @@ export const DataProvider = ({ children }) => {
     });
     const current = monthKey(new Date());
     let keys = Object.keys(totals).sort();
-    if (keys.length > 1) keys = keys.filter((k) => k !== current);
+    const pastKeys = keys.filter((k) => k < current);
+    if (pastKeys.length) keys = pastKeys;
     const months = keys.map((key) => ({ key, spent: totals[key], saved: monthlyIncome - monthlyFixed - totals[key] }));
     const averageSaved = months.length ? months.reduce((s, m) => s + m.saved, 0) / months.length : 0;
     return { months, averageSaved };

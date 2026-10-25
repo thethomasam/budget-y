@@ -7,6 +7,12 @@ import { useData, monthLabelFor } from './DataContext';
 
 const money = (n) => `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(0)}`;
 
+// "October 2026" -> "Oct 26", so every month's label fits and none are skipped.
+const shortMonth = (label) => {
+  const [month, year] = label.split(' ');
+  return `${month.slice(0, 3)} ${year.slice(2)}`;
+};
+
 const axisTick = { fill: '#898781', fontSize: 11 };
 const dollarTick = (v) => `${v < 0 ? '-' : ''}$${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(1)}k` : Math.abs(v)}`;
 
@@ -205,7 +211,7 @@ const SavingsCard = () => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#E1E8ED" vertical={false} />
-              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={axisTick} />
+              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={axisTick} interval={0} tickFormatter={shortMonth} />
               <YAxis axisLine={false} tickLine={false} tick={axisTick} tickFormatter={dollarTick} domain={[(min) => Math.min(0, min), (max) => Math.max(0, max)]} />
               <Tooltip content={<SavingsTooltip />} cursor={{ stroke: '#c3c2b7', strokeWidth: 1 }} />
               <ReferenceLine y={0} stroke="#c3c2b7" />
