@@ -31,10 +31,12 @@ with engine.begin() as conn:
     conn.execute(
         text("CREATE UNIQUE INDEX IF NOT EXISTS ix_categories_user_name ON categories (user_id, name)")
     )
+    # API keys briefly stored a display prefix; it is no longer part of the model.
+    conn.execute(text("ALTER TABLE api_keys DROP COLUMN IF EXISTS prefix"))
 
 app = FastAPI()
 
-app.include_router(auth.router)
+app.include_router(auth.router, include_in_schema=False)
 app.include_router(transactions.router)
 app.include_router(categories.router)
 app.include_router(recurring.router)

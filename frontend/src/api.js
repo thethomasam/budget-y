@@ -55,6 +55,12 @@ export const register = (username, password) => postJson('/auth/register', { use
 
 export const logout = () => request('/auth/logout', { method: 'POST' });
 
+export const listApiKeys = () => request('/auth/api-keys');
+
+export const createApiKey = (name) => postJson('/auth/api-keys', { name });
+
+export const deleteApiKey = (id) => request(`/auth/api-keys/${id}`, { method: 'DELETE' });
+
 export const listTransactions = () => request('/transaction');
 
 export const listCategories = () => request('/categories');

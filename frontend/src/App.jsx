@@ -11,6 +11,7 @@ import CategoryLimitsView from './CategoryLimitsView';
 import SimilarTransactionsPrompt from './SimilarTransactionsPrompt';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginView from './LoginView';
+import ApiKeysView from './ApiKeysView';
 
 function SummaryHeader() {
   const { monthTotal, monthLabel, error, selectedMonth, setSelectedMonth, availableMonths } = useData();
@@ -58,6 +59,7 @@ const TABS = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'transactions', label: 'Transactions' },
   { key: 'limits', label: 'Category Limits' },
+  { key: 'keys', label: 'API Keys' },
 ];
 
 function Nav({ activeView, onChange }) {
@@ -101,8 +103,10 @@ function AuthedApp() {
           <Dashboard />
         ) : activeView === 'transactions' ? (
           <TransactionsView />
-        ) : (
+        ) : activeView === 'limits' ? (
           <CategoryLimitsView />
+        ) : (
+          <ApiKeysView />
         )}
       </div>
     </DataProvider>
