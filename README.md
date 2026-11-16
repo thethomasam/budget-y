@@ -2,12 +2,15 @@
 
 Personal finance tracker. Import bank CSVs, auto-categorise transactions with a local LLM, and view spending breakdowns on a dashboard. Self-hosted, no bank APIs.
 
+Frontend was built with Claude Code (Anthropic).
+
 ## What it does
 
 - Import transactions via CSV upload or log them manually via iOS Shortcut
 - Auto-categorises merchants using fuzzy matching against past transactions, then falls back to web search + local LLM (Qwen3 via Ollama) for unknowns
 - Dashboard with monthly spend by category, budget vs actual, savings trend
 - Edit and bulk-change categories, filter and search transactions
+- Multi-user: sign up and log in, with each user's transactions kept separate
 
 ## How categorisation works
 
@@ -23,7 +26,8 @@ Personal finance tracker. Import bank CSVs, auto-categorise transactions with a 
 | Frontend | React, Vite, Tailwind, Recharts |
 | LLM | Ollama (`qwen3:8b`) |
 | Search | Tavily API |
-| Infra | Docker Compose, Nginx, oauth2-proxy |
+| Auth | JWT (python-jose), bcrypt (passlib), per-user API keys |
+| Infra | Docker Compose, Nginx |
 
 ## Architecture
 
@@ -63,6 +67,27 @@ flowchart TB
     Celery --> PostgreSQL
 ```
 
+## Authentication
+
+Users sign up and log in with a username and password. The backend issues a JWT (HS256, 30-day expiry) that the frontend sends as `Authorization: Bearer <token>`. Every transaction is tied to a user, and all data routes only return the current user's rows.
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /api/auth/register` | none | Create an account, returns a token |
+| `POST /api/auth/login` | none | Form login (`username`, `password`), returns a token |
+| `GET /api/auth/me` | Bearer | Current user |
+| `POST /api/auth/api-key` | Bearer | Generate (or rotate) your API key |
+| `GET /api/auth/api-key` | Bearer | Fetch your existing API key |
+
+Set `SECRET_KEY` in the backend `.env` to a long random string. It defaults to an insecure placeholder.
+
+```bash
+# Backend host .env
+SECRET_KEY=$(openssl rand -hex 32)
+```
+
+The API key is for scripts and the iOS Shortcut. It is accepted only by `POST /api/transactions`, via the `X-Api-Key` header. Everything else needs a Bearer token.
+
 ## Deployment
 
 ### All-in-one (local dev)
@@ -93,6 +118,7 @@ Configure each machine's `.env` with the addresses of the other services:
 
 ```bash
 # Backend host .env
+SECRET_KEY=<long-random-string>
 DATABASE_URL=postgresql://budgety:pass@<db-host>:5432/budgety
 REDIS_URL=redis://redis:6379/0
 OLLAMA_URL=http://<ollama-host>:11434/api/generate
@@ -117,7 +143,7 @@ docker compose exec backend python scripts/sqlite_to_postgres.py
 </tr>
 </table>
 
-POST to `https://<your-domain>/api/shortcut/transactions` with header `X-Api-Key: <key>`:
+Generate a key with `POST /api/auth/api-key` while logged in, then POST to `https://<your-domain>/api/transactions` with header `X-Api-Key: <key>`. The transaction is saved to the account that owns the key:
 
 ```json
 { "merchant": "Coles", "amount": 42.50, "card": "ANZ" }
